@@ -1,0 +1,18 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add:
+    - -std=c++23
+    - -ferror-limit=0
+    - -Wno-everything
+  Remove: [-m*, -f*]
+
+Diagnostics:
+  Suppress:
+    - pp_file_not_found
+    - undeclared_var_use
+    - "no_member*"
+    - ref_non_value
+    - ovl_no_viable_member_function_in_call
+    - invalid_token_after_toplevel_declarator
+    - unexpected_typedef
+    - expected_lparen_after_type

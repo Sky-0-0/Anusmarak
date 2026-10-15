@@ -1,0 +1,56 @@
+# ------- ESP-IDF & Configuration -------
+sdkconfig
+sdkconfig.old
+managed_components/
+.espressif/
+
+# ------- Build Artifacts & Binaries -------
+build/
+**/build/
+*.o
+*.a
+*.out
+*.exe
+*.elf
+*.bin
+*.map
+flasher_args.json
+
+# ------- CMake Generated Files -------
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+
+# ------- Language Servers & Tooling -------
+.clangd/
+.ccls-cache/
+compile_commands.json
+
+# ------- Python & Virtual Environments -------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+venv/
+.venv/
+env/
+
+# ------- Editor & IDE Settings -------
+.vscode/
+*.code-workspace
+.zed/
+*.tmp
+*.bak
+*.log
+*~
+
+# ------- OS & Metadata -------
+Desktop.ini
+Thumbs.db
+ehthumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
