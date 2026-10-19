@@ -10,16 +10,15 @@
 #include <esp_timer.h>
 #include <driver/i2c_master.h>
 #include <driver/spi_master.h>
-#include <driver/i2s_std.h>
 #include <esp_adc/adc_oneshot.h>
 #include <esp_adc/adc_cali.h>
-#include <esp_mn_iface.h>
-#include <esp_http_server.h>
-#include "Configuration.hpp"
-#include <freertos/FreeRTOS.h>
-#include <freertos/queue.h>
 #include <esp_adc/adc_cali_scheme.h>
 #include "driver/temperature_sensor.h"
+#include <esp_http_server.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include "Configuration.hpp"
+#include <esp_ota_ops.h>
 #include "led_strip.h" // IWYU pragma: keep
 
 // ------- Logger -------
@@ -29,17 +28,16 @@ public:
     using LVL = Configuration::Logger::LVL;
     Logger(const char* M, LF F);
 
-    template<class... A> void Trace(std::string_view F, A&&... ARGS) const { _Log(LVL::TRACE, F, std::forward<A>(ARGS)...); }
-    template<class... A> void Metrics(std::string_view F, A&&... ARGS) const { _Log(LVL::METRICS, F, std::forward<A>(ARGS)...); }
-    template<class... A> void Warn(std::string_view F, A&&... ARGS) const { _Log(LVL::WARN, F, std::forward<A>(ARGS)...); }
-    template<class... A> void Exception(std::string_view F, A&&... ARGS) const { _Log(LVL::EXCEPTION, F, std::forward<A>(ARGS)...); }
+    template<class... A> void Trace(std::format_string<A...> F, A&&... ARGS) const { _Log(LVL::TRACE, F, std::forward<A>(ARGS)...); }
+    template<class... A> void Metrics(std::format_string<A...> F, A&&... ARGS) const { _Log(LVL::METRICS, F, std::forward<A>(ARGS)...); }
+    template<class... A> void Warn(std::format_string<A...> F, A&&... ARGS) const { _Log(LVL::WARN, F, std::forward<A>(ARGS)...); }
+    template<class... A> void Exception(std::format_string<A...> F, A&&... ARGS) const { _Log(LVL::EXCEPTION, F, std::forward<A>(ARGS)...); }
 private:
     struct Entry { const char* M; LF F; LVL L; std::array<char, Configuration::Logger::MSGLEN> MSG; };
 
-    template<class... A> void _Log(LVL L, std::string_view F, A&&... ARGS) const {
+    template<class... A> void _Log(LVL L, std::format_string<A...> F, A&&... ARGS) const {
         Entry I{_M, _F, L, {}};
-        auto Res = std::vformat_to(I.MSG.data(), F, std::make_format_args(ARGS...));
-        *Res = '\0';
+        *std::format_to_n(I.MSG.data(), I.MSG.size() - 1, F, std::forward<A>(ARGS)...).out = '\0';
         xQueueSend(_Queue, &I, 0);
     }
 
@@ -47,6 +45,7 @@ private:
     const char* _M;
     LF _F;
     inline static QueueHandle_t _Queue{};
+    inline static std::array<int, Configuration::Logger::PATHS.size()> _Files{-1, -1};
 };
 
 // ------- Timer -------
@@ -66,117 +65,96 @@ private:
 // ------- Hardware -------
 class Hardware {
 public:
-    using Device = Configuration::Hardware::Device;
+    using Device = Configuration::Hardware::Device; using Expression = Configuration::Hardware::Expression; using Action = Configuration::Actions::Action;
     bool Exception(Device D) const { return _Exceptions & D; }
     uint16_t Exceptions() const { return _Exceptions; }
     void Initialize();
-    float Temperature() const;
-    void RGB(uint8_t R, uint8_t G, uint8_t B);
-    void BLK(uint8_t N, uint8_t R, uint8_t G, uint8_t B);
+    float Temperature() const { float T = 0.0f; if (_TSH) temperature_sensor_get_celsius(_TSH, &T); return T; }
+    void RGB(uint8_t R, uint8_t G, uint8_t B) { if (_LED) { led_strip_set_pixel(_LED, 0, R, G, B); led_strip_refresh(_LED); } }
+    void BLK(uint8_t N, uint8_t R, uint8_t G, uint8_t B) { for (uint8_t I = 0; I < N; ++I) { RGB(R, G, B); vTaskDelay(pdMS_TO_TICKS(150)); RGB(0, 0, 0); vTaskDelay(pdMS_TO_TICKS(150)); } vTaskDelay(pdMS_TO_TICKS(1000)); }
+    float Distance() const { return _Distance.load(std::memory_order_relaxed); }
     std::string_view Summary();
+    i2c_master_bus_handle_t I2C() const { return _I2C; }
+    spi_host_device_t SPI() const { return SPI2_HOST; }
+    uint32_t Voltage() const;
+    static uint8_t Charge(uint32_t MV) { using namespace Configuration::Hardware; return MV <= BATMIN ? 0 : MV >= BATMAX ? 100 : (MV - BATMIN) / BATSPAN; }
+    uint8_t PCT() const { return _Pct.load(std::memory_order_relaxed); }
+    uint16_t MV() const { return _MV.load(std::memory_order_relaxed); }
+    bool Halted() const { return _Halt.load(std::memory_order_relaxed); }
+    Action Mode() const { return _Mode.load(std::memory_order_relaxed); }
+    void SetExpression(Expression Expr) { _Expression.store(Expr, std::memory_order_relaxed); }
+
+    std::string_view EXPR() const { size_t IDX = static_cast<size_t>(_Expression.load(std::memory_order_relaxed)); return ::Configuration::Hardware::NAMES[IDX]; }
 
 private:
-    friend class Drive; friend class UI; friend class Audio; friend class BootLoader; friend class Network; friend class Power;
-    void _Report(Device D, bool Exception);
+    friend class Drive; friend class UI; friend class Network; friend class Orchestrator;
+    void _Report(Device D, bool X) { if (X) _Exceptions |= D; else _Exceptions &= ~D; }
     uint16_t _Exceptions{};
+    std::atomic<float> _Distance{0.0f};
+    std::atomic<Expression> _Expression{Expression::DEAD};
+    std::atomic<Action> _Mode{Action::STOP};
+    std::atomic<bool> _Halt{false};
+    std::atomic<uint8_t> _Pct{0};
+    std::atomic<uint16_t> _MV{0};
     std::array<char, Configuration::Logger::MSGLEN> _BUF{};
     Logger _Log{"HARDWARE", Configuration::Logger::LF::HARDWARE};
-
     temperature_sensor_handle_t _TSH{nullptr};
     led_strip_handle_t _LED{nullptr};
+    i2c_master_bus_handle_t _I2C{nullptr};
+    adc_oneshot_unit_handle_t _ADC{nullptr};
+    adc_cali_handle_t _CLB{nullptr};
 };
 
 // ------- Drive -------
 class Drive {
 public:
     using Action = Configuration::Actions::Action;
-    Drive(Hardware& B);
+    explicit Drive(Hardware& B) : _Board(B) {}
     void Initialize();
-    void Act(Action A, uint8_t S = Configuration::Drive::DEFAULTSPEED) { _REQ.store(uint16_t((A + 1) << 8 | S), std::memory_order_relaxed); }
-    Action CMode() const { return _Mode.load(std::memory_order_relaxed); }
+
 private:
     void _Task();
     void _Ping();
-    bool _GyroZ(int16_t& RW);
+    void _Motors(bool LF, bool RF, int LS, int RS);
     IRAM_ATTR static void _EchoISR(void* P);
-    std::atomic<uint16_t> _REQ{};
-    std::atomic<Action> _Mode{Action::STOP};
+
     std::atomic<uint32_t> _EchoUs{};
     int64_t _EchoStart{};
     float _Bias{};
-    i2c_master_bus_handle_t _SYSBUS{};
     i2c_master_dev_handle_t _IMU{};
     Hardware& _Board;
     Logger _Log{"DRIVE", Configuration::Logger::LF::HARDWARE};
 };
 
-// ------- Audio -------
-class Audio {
-public:
-    Audio(Hardware& Board);
-    void Initialize();
-private:
-    void _Task();
-    esp_wn_iface_t* _WakeNet{};
-    esp_mn_iface_t* _MultiNet{};
-    model_iface_data_t* _WND{};
-    model_iface_data_t* _MND{};
-    std::array<int16_t, Configuration::Audio::BUFLEN> _BUF{};
-    i2s_chan_handle_t _RX{}, _TX{};
-    Hardware& _Board;
-    Logger _Log{"AUDIO", Configuration::Logger::LF::AUDIO};
-};
-
-// ------- Power -------
-class Power {
-public:
-    explicit Power(Hardware& B);
-    void Initialize();
-    uint32_t Voltage() const;
-    uint8_t PCT() const;
-
-private:
-    adc_oneshot_unit_handle_t _ADC{nullptr};
-    adc_cali_handle_t _CLB{nullptr};
-    Hardware& _Board;
-};
-
 // ------- UI -------
 class UI {
 public:
-    using Action = Configuration::Actions::Action;
-    using Expression = Configuration::UI::Expression;
-    UI(Hardware& Board, Drive& Motors, Audio& AU);
+    explicit UI(Hardware& Board) : _Board(Board) {}
     void Initialize();
-    std::string_view EXPR() const;
+
 private:
     void _Task();
-    void _Run(Action A);
-    bool _Draw(uint8_t First, uint8_t Last);
-    esp_err_t _Send(uint8_t CMD, const uint8_t* DAT, size_t LEN);
-    uint8_t _Blink{};
-    std::array<uint8_t, 4> _Shown{0xFF, 0xFF, 0xFF, 0xFF};
-    alignas(4) std::array<uint16_t, Configuration::UI::WIDTH * Configuration::UI::STRIPROWS> _Strip{};
-    std::atomic<uint8_t> _BPT{};
+    esp_err_t _Display(uint8_t CMD, const uint8_t* DAT, size_t LEN);
+    std::array<uint16_t, Configuration::UI::WIDTH * Configuration::UI::STRIPROWS> _Strip{};
     spi_device_handle_t _TFT{};
     Hardware& _Board;
-    Drive& _Motors;
-    Audio& _AU;
-    Logger _Log{"UI", Configuration::Logger::LF::UTILITIES};
-
-    Configuration::UI::Expression _Expression{Configuration::UI::Expression::DEAD};
+    Logger _Log{"UI", Configuration::Logger::LF::ORCHESTRATOR};
 };
 
 // ------- Network -------
 class Network {
 public:
-    Network(Hardware& Board, Power& Battery, UI& UI);
+    explicit Network(Hardware& Board) : _Board(Board) {}
     void Initialize();
 private:
+    void _Stop();
     static void _Reconnect(void* Arg, esp_event_base_t Base, int32_t ID, void* Data);
     static esp_err_t _HTML(httpd_req_t* REQ);
     static esp_err_t _Logs(httpd_req_t* REQ);
     static esp_err_t _Telemetry(httpd_req_t* R);
-    Hardware& _Board; Power& _Battery; UI& _UI;
-    Logger _Log{"Network", Configuration::Logger::LF::UTILITIES};
+    static esp_err_t _Restart(httpd_req_t* REQ);
+    static esp_err_t _Shutdown(httpd_req_t* REQ);
+    static esp_err_t _OTA(httpd_req_t* REQ);
+    Hardware& _Board;
+    Logger _Log{"NETWORK", Configuration::Logger::LF::ORCHESTRATOR};
 };

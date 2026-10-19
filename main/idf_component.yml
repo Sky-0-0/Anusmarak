@@ -14,6 +14,6 @@ dependencies:
   #   # `public` flag doesn't have an effect dependencies of the `main` component.
   #   # All dependencies of `main` are public by default.
   #   public: true
-  espressif/esp-sr: ^2.6.0
   joltwallet/littlefs: ^1.22.3
   espressif/led_strip: ^3.1.0
+  espressif/mdns: '*'

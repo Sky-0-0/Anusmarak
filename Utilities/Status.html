@@ -31,14 +31,15 @@
     .KPILBL{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
     .KPIVAL{font-family:'Syne',sans-serif;font-weight:700;font-size:22px;line-height:1;margin-bottom:4px}
     .KPISB{font-size:10px;color:var(--dim)}
-    .DVRW{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-    .DV{background:var(--sur);border:1px solid var(--bor);border-radius:8px;padding:14px 18px;display:flex;align-items:center;gap:14px}
-    .DVICN{width:38px;height:38px;border-radius:6px;background:#0d0f14;border:1px solid var(--bor);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--y)}
-    .DVLBL{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
-    .DVST{font-size:13px;color:var(--text)}
-    .PILL{margin-left:auto;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:20px;background:rgba(74,82,96,.18);color:var(--mut);border:1px solid rgba(74,82,96,.28)}
-    .PILL.ACTIVE{background:rgba(226,183,20,.1);color:var(--y);border-color:rgba(226,183,20,.3)}
-    .PILL.WARN{background:rgba(255,107,71,.1);color:var(--r);border-color:rgba(255,107,71,.3)}
+
+    /* Power / E-Stop Buttons */
+    .PWRRW{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .BTNPS{width:100%;background:transparent;border:1px solid #2a354a;color:#47c5ff;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:3px;transition:all .2s}
+    .BTNPS:hover{background:rgba(71,197,255,.1);border-color:#47c5ff;box-shadow:0 0 24px rgba(71,197,255,.12)}
+    .EStop{width:100%;background:transparent;border:1px solid #4a1a1a;color:#ff6b47;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:3px;transition:all .2s}
+    .EStop:hover{background:rgba(255,107,71,.1);border-color:#ff6b47;box-shadow:0 0 24px rgba(255,107,71,.12)}
+    .material-icons-sharp{font-size:16px}
+
     .MACCRD{background:var(--sur);border:1px solid var(--bor);border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.4);display:flex;flex-direction:column}
     .MACHDR{display:flex;align-items:center;background:#0d1117;border-bottom:1px solid var(--bor);padding:0 14px;height:38px}
     .MACDOTS{display:flex;gap:7px;align-items:center;margin-right:16px}
@@ -68,7 +69,7 @@
     <div class="LOGO">Anusmarak</div>
     <div class="HLFT">
       <span class="PIPE">|</span>
-      <span class="STDOT DOTG" id="HDot"></span>
+      <span class="STDOT DOTR" id="HDot"></span>
       <span class="HVAL" id="HLat">-- ms</span>
       <span class="PIPE">|</span>
       <span class="HVAL" id="RSSI">-- dBm</span>
@@ -80,10 +81,10 @@
     <section>
       <div class="SC"><span class="SCTTL">System Telemetry</span><div class="SCLN"></div></div>
       <div class="KPIRW">
-        <div class="KPI"><div class="KPILBL">Expression</div><div class="KPIVAL" style="color:var(--b)" id="Expression">--</div><div class="KPISB">Mood</div></div>
-        <div class="KPI"><div class="KPILBL">Battery</div><div class="KPIVAL" style="color:var(--y)" id="Battery">-- %</div><div class="KPISB" id="Voltage">-- V</div></div>
-        <div class="KPI"><div class="KPILBL">Temperature</div><div class="KPIVAL" style="color:var(--b)" id="Temperature">-- °C</div><div class="KPISB">Chip Temperature</div></div>
-        <div class="KPI"><div class="KPILBL">Exceptions</div><div class="KPIVAL" style="color:var(--y)" id="Exceptions">-- Exeptions</div><div class="KPISB" id="ExceptionCount">0 Exeptions</div></div>
+        <div class="KPI"><div class="KPILBL">Expression</div><div class="KPIVAL" style="color:var(--r)" id="Expression">--</div><div class="KPISB">Mood</div></div>
+        <div class="KPI"><div class="KPILBL">Battery</div><div class="KPIVAL" style="color:var(--r)" id="Battery">-- %</div><div class="KPISB" id="Voltage">-- V</div></div>
+        <div class="KPI"><div class="KPILBL">Temperature</div><div class="KPIVAL" style="color:var(--r)" id="Temperature">-- °C</div><div class="KPISB">Chip Temperature</div></div>
+        <div class="KPI"><div class="KPILBL">Exceptions</div><div class="KPIVAL" style="color:var(--r)" id="Exceptions">-- Exceptions</div><div class="KPISB" id="ExceptionCount">0 Exceptions</div></div>
       </div>
     </section>
 
@@ -96,130 +97,127 @@
     </section>
 
     <section>
-      <div class="SC"><span class="SCTTL">Archives</span><div class="SCLN"></div></div>
-      <div class="MACCRD">
-        <div class="MACHDR">
-          <div class="MACDOTS"><div class="MACDOT RED"></div><div class="MACDOT YLW"></div><div class="MACDOT GRN"></div></div>
-          <div class="TERMTABS">
-            <button class="TTAB ACTIVE" onclick="LDLG('Utilities', event)">Utilities</button>
-            <button class="TTAB" onclick="LDLG('Hardware', event)">Hardware</button>
-            <button class="TTAB" onclick="LDLG('Audio', event)">Audio</button>
-          </div>
-          <span id="LogMeta" style="font-size:10px;color:var(--dim)">/littlefs/Logs/</span>
+        <div class="SC"><span class="SCTTL">Archives</span><div class="SCLN"></div></div>
+        <div class="MACCRD">
+            <div class="MACHDR">
+            <div class="MACDOTS"><div class="MACDOT RED"></div><div class="MACDOT YLW"></div><div class="MACDOT GRN"></div></div>
+            <div class="TERMTABS">
+                <button class="TTAB ACTIVE" onclick="LDLG('Orchestrator', event)">Orchestrator</button>
+                <button class="TTAB" onclick="LDLG('Hardware', event)">Hardware</button>
+            </div>
+            <span id="LogMeta" style="font-size:10px;color:var(--dim)">/littlefs/Logs/</span>
         </div>
         <div class="TERMBODY" id="LogTerminal">
-          <div class="SKLBOX"><div class="SKLBAR"></div><span>No Logs Recorded</span></div>
+            <div class="SKLBOX"><div class="SKLBAR"></div><span>No Logs Recorded</span></div>
+        </div>
+            <input type="file" id="NativeFileInput" accept=".bin" style="display:none" onchange="this.files.length&&PRSBIN(this.files[0])"/>
+            <div style="background:#0d1117;border-top:1px solid var(--bor);height:38px;padding:0 14px;display:flex;justify-content:flex-end;align-items:center;">
+            <button style="background:transparent;border:none;color:var(--dim);cursor:pointer;display:flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;font-size:11px;" onclick="document.getElementById('NativeFileInput').click()">
+            <span>OTA</span>
+            <span class="material-icons-sharp" style="font-size:16px">attach_file</span>
+            </button>
         </div>
       </div>
     </section>
 
-    <section style="padding-bottom:10px">
-      <div class="SC"><span class="SCTTL">Terminal</span><div class="SCLN"></div></div>
-      <div class="MACCRD">
-        <div class="MACHDR"><div class="MACDOTS"><div class="MACDOT RED"></div><div class="MACDOT YLW"></div><div class="MACDOT GRN"></div></div><span class="MACTTL">Anusmarak — zsh</span></div>
-        <div class="TERMBODY TERM" id="TERM">
-          <div class="TERMFL" id="TERMFL"><span class="material-icons-sharp" style="font-size:32px;color:var(--y)">cloud_upload</span><div style="font-size:12px;font-weight:500">Drop firmware (.bin) or log file</div></div>
-          <div id="CLIOUT">Anusmarak~</div>
-        </div>
-        <input type="file" id="NativeFileInput" accept=".bin,.log,.txt" style="display:none" onchange="this.files.length&&PRSBIN(this.files[0])"/>
-        <div class="CLIWRP">
-          <span class="CLIP">Anusmarak ~ ❯</span>
-          <input type="text" id="CLIIP" class="CLIIP" placeholder="Type command..." onkeydown="if(event.key==='Enter'){CLICMD(this.value);this.value='';}"/>
-          <button class="CLIBTN" title="Attach File" onclick="document.getElementById('NativeFileInput').click()"><span class="material-icons-sharp" style="font-size:18px">attach_file</span></button>
-        </div>
+        <section>
+      <div class="SC"><span class="SCTTL">Power Controls</span><div class="SCLN"></div></div>
+      <div class="PWRRW">
+        <button class="BTNPS" onclick="SNDCMD('/Restart')"><span class="material-icons-sharp">restart_alt</span>Restart</button>
+        <button class="EStop" id="ShutBtn" onclick="SNDCMD('/Shutdown')"><span class="material-icons-sharp">power_settings_new</span>Shutdown</button>
       </div>
     </section>
   </main>
 
   <script>
-    Chart.defaults.color = '#6b7585'; Chart.defaults.borderColor = '#1e2229'; Chart.defaults.font.family = "'DM Mono', monospace"; Chart.defaults.font.size = 11;
+      Chart.defaults.color = '#6b7585'; Chart.defaults.borderColor = '#1e2229'; Chart.defaults.font.family = "'DM Mono', monospace"; Chart.defaults.font.size = 11;
 
-    const MAXPTS = 60;
-    const TIMELBLS = Array(MAXPTS).fill('');
-    const DSTDAT = Array(MAXPTS).fill(null);
+      const MAXPTS = 60;
+      const TIMELBLS = Array(MAXPTS).fill('');
+      const DSTDAT = Array(MAXPTS).fill(null);
 
-    const DSTC = new Chart(document.getElementById('DistanceChart'), {
-      type: 'line', data: { labels: TIMELBLS, datasets: [{ data: DSTDAT, borderColor: '#47c5ff', backgroundColor: 'rgba(71,197,255,.07)', fill: true, tension: .2, pointRadius: 0, borderWidth: 1.5, spanGaps: true }] },
-      options: { responsive: true, animation: { duration: 150 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(30,34,41,.6)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(30,34,41,.6)' }, min: 0 } } }
-    });
+      const DSTC = new Chart(document.getElementById('DistanceChart'), {
+        type: 'line', data: { labels: TIMELBLS, datasets: [{ data: DSTDAT, borderColor: '#47c5ff', backgroundColor: 'rgba(71,197,255,.07)', fill: true, tension: .2, pointRadius: 0, borderWidth: 1.5, spanGaps: true }] },
+        options: { responsive: true, animation: { duration: 150 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(30,34,41,.6)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(30,34,41,.6)' }, min: 0, max: 200 } } }
+      });
 
-    let CL = 'Utilities';
-    let UPSEC = 0;
+      let CL = 'Orchestrator';
+      let LAST_TELEMETRY = 0;
 
-    const LDLG = async (NAM, EV) => {
-      if (EV) document.querySelectorAll('.TTAB').forEach(B => B.classList.toggle('ACTIVE', B === EV.currentTarget));
-      CL = NAM;
-      const BOX = document.getElementById('LogTerminal');
-      try {
-        const RES = await fetch(`/Logs/${NAM}.log`);
-        const TXT = RES.ok ? (await RES.text()).trim() : '';
-        const HTML = TXT || '<div class="SKLBOX"><div class="SKLBAR"></div><span>No Logs Recorded</span></div>';
-        if (BOX.innerHTML !== HTML) {
-          const BTM = BOX.scrollHeight - BOX.scrollTop <= BOX.clientHeight + 40;
-          BOX.innerHTML = HTML;
-          if (BTM) BOX.scrollTop = BOX.scrollHeight;
+      const LDLG = async (NAM, EV) => {
+        if (EV) document.querySelectorAll('.TTAB').forEach(B => B.classList.toggle('ACTIVE', B === EV.currentTarget));
+        CL = NAM;
+        const BOX = document.getElementById('LogTerminal');
+        if (Date.now() - LAST_TELEMETRY > 4000) return;
+        try {
+          const RES = await fetch(`/Logs/${NAM}.log`);
+          const TXT = RES.ok ? (await RES.text()).trim() : '';
+          const HTML = TXT || '<div class="SKLBOX"><div class="SKLBAR"></div><span>No Logs Recorded</span></div>';
+          if (BOX.innerHTML !== HTML) {
+            const BTM = BOX.scrollHeight - BOX.scrollTop <= BOX.clientHeight + 40;
+            BOX.innerHTML = HTML;
+            if (BTM) BOX.scrollTop = BOX.scrollHeight;
+          }
+        } catch {}
+      };
+
+      setInterval(() => CL && LDLG(CL), 3000);
+
+      const RST = () => {
+        document.getElementById('HDot').className = 'STDOT DOTR';
+        document.getElementById('HLat').textContent = '-- ms';
+        document.getElementById('RSSI').textContent = '-- dBm';
+        document.getElementById('Expression').textContent = '--';
+        document.getElementById('Battery').textContent = '-- %';
+        document.getElementById('Voltage').textContent = '-- V';
+        document.getElementById('Temperature').textContent = '-- °C';
+        document.getElementById('Exceptions').textContent = '--';
+        document.getElementById('HUPT').textContent = 'OFFLINE';
+        document.getElementById('Expression').style.color = 'var(--r)'
+        document.getElementById('Battery').style.color = 'var(--r)'
+        document.getElementById('Temperature').style.color = 'var(--r)'
+        document.getElementById('Exceptions').style.color = 'var(--r)'
+      };
+
+      const UPDTDSH = DAT => {
+        if (!DAT) return;
+        LAST_TELEMETRY = Date.now();
+        if (DAT.Latency != null) document.getElementById('HLat').textContent = DAT.Latency + ' ms';
+        if (DAT.RSSI != null) { document.getElementById('RSSI').textContent = DAT.RSSI + ' dBm'; document.getElementById('HDot').className = 'STDOT ' + (DAT.RSSI > -65 ? 'DOTG' : DAT.RSSI > -80 ? 'DOTY' : 'DOTR'); }
+        if (DAT.Expression != null) { document.getElementById('Expression').textContent = DAT.Expression; document.getElementById('Expression').style.color = DAT.Expression === 'DEAD' ? 'var(--r)' : (DAT.Expression === 'WORRIED' ? 'var(--y)' : (DAT.Expression === 'SLEEPY' ? 'var(--b)' : 'var(--g)')); }
+        if (DAT.Exceptions != null) { document.getElementById('Exceptions').textContent = DAT.Exceptions;
+            let CNT = DAT.Exceptions === 'None' ? 0 : DAT.Exceptions.split(',').length; document.getElementById('ExceptionCount').textContent = CNT + ' Exceptions'; document.getElementById('Exceptions').style.color = CNT === 0 ? 'var(--g)' : (CNT <= 2 ? 'var(--y)' : 'var(--r)');}
+        if (DAT.BPCT != null && DAT.BVLT != null) { document.getElementById('Battery').textContent = DAT.BPCT + '%'; document.getElementById('Voltage').textContent = DAT.BVLT + ' V'; document.getElementById('Battery').style.color = DAT.BPCT > 50 ? 'var(--g)' : (DAT.BPCT > 20 ? 'var(--y)' : 'var(--r)');}
+        if (DAT.Temperature != null) { document.getElementById('Temperature').textContent = DAT.Temperature + '°C'; document.getElementById('Temperature').style.color = DAT.Temperature < 60 ? 'var(--g)' : (DAT.Temperature < 75 ? 'var(--y)' : 'var(--r)');}
+        if (DAT.Uptime != null) {
+          let UPSEC = DAT.Uptime;
+          const PAD = N => String(N).padStart(2, '0');
+          document.getElementById('HUPT').textContent = `${PAD(Math.floor(UPSEC / 3600))}:${PAD(Math.floor((UPSEC % 3600) / 60))}:${PAD(UPSEC % 60)}`;
         }
-      } catch {}
-    };
+        if (DAT.USD != null) { TIMELBLS.push(new Date().toLocaleTimeString()); TIMELBLS.shift(); DSTDAT.push(DAT.USD); DSTDAT.shift(); DSTC.update('none'); }
+      };
 
-    setInterval(() => CL && LDLG(CL), 3000);
+      setInterval(() => {
+        if (Date.now() - LAST_TELEMETRY > 4000) {
+          RST();
+        }
+      }, 1000);
 
-    const UPDTDSH = DAT => {
-      if (!DAT) return;
+      const SNDCMD = async URL => {
+        if (!confirm(`Are you sure you want to execute: ${URL}?`)) return;
+        try { await fetch(URL); } catch {}
+      };
 
-      if (!DAT) return;
-      if (DAT.Latency != null) document.getElementById('HLat').textContent = DAT.Latency + ' ms';
-      if (DAT.RSSI != null) { document.getElementById('RSSI').textContent = DAT.RSSI + ' dBm'; document.getElementById('HDot').className = 'STDOT ' + (DAT.RSSI > -65 ? 'DOTG' : DAT.RSSI > -80 ? 'DOTY' : 'DOTR'); }
-      if (DAT.Expression != null) { document.getElementById('Expression').textContent = DAT.Expression; document.getElementById('Expression').style.color = DAT.Expression === 'DEAD' ? 'var(--r)' : (DAT.Expression === 'WORRIED' ? 'var(--y)' : (DAT.Expression === 'SLEEPY' ? 'var(--b)' : 'var(--g)')); }
-      if (DAT.Exceptions != null) { document.getElementById('Exceptions').textContent = DAT.Exceptions;
-          let CNT = DAT.Exceptions === 'None' ? 0 : DAT.Exceptions.split(',').length; document.getElementById('ExceptionCount').textContent = CNT + ' Exceptions'; document.getElementById('Exceptions').style.color = CNT === 0 ? 'var(--g)' : (CNT <= 2 ? 'var(--y)' : 'var(--r)');}
-      if (DAT.BPCT != null && DAT.BVLT != null) { document.getElementById('Battery').textContent = DAT.BPCT + '%'; document.getElementById('Voltage').textContent = DAT.BVLT + ' V'; document.getElementById('Battery').style.color = DAT.BPCT > 50 ? 'var(--g)' : (DAT.BPCT > 20 ? 'var(--y)' : 'var(--r)');}
-      if (DAT.Temperature != null) { document.getElementById('Temperature').textContent = DAT.Temperature + '°C'; document.getElementById('Temperature').style.color = DAT.Temperature < 60 ? 'var(--g)' : (DAT.Temperature < 75 ? 'var(--y)' : 'var(--r)');}
-      if (DAT.USD != null) { TIMELBLS.push(new Date().toLocaleTimeString()); TIMELBLS.shift(); DSTDAT.push(DAT.USD); DSTDAT.shift(); DSTC.update('none'); }
-    };
+      const PRSBIN = F => {
+        if (!F.name.endsWith('.bin')) return;
+        const X = new XMLHttpRequest();
+        X.open('POST', '/OTA', true);
+        X.setRequestHeader('Content-Type', 'application/octet-stream');
+        X.send(F);
+      };
 
-    setInterval(() => {
-      UPSEC++;
-      const PAD = N => String(N).padStart(2, '0');
-      document.getElementById('HUPT').textContent = `${PAD(Math.floor(UPSEC / 3600))}:${PAD(Math.floor((UPSEC % 3600) / 60))}:${PAD(UPSEC % 60)}`;
-    }, 1000);
-
-    const CLICMD = async CMD => {
-      if (!CMD.trim()) return;
-      const CLN = CMD.trim(), OUT = document.getElementById('CLIOUT'), TRM = document.getElementById('TERM');
-      OUT.innerHTML += `\n<span style="color:var(--y)">Anusmarak ~ ❯</span> ${CLN}`;
-      if (CLN.toLowerCase() === 'clear') { OUT.innerHTML = 'Anusmarak 1.0.0\nType "help" for commands.\nAnusmarak ~ ❯'; return; }
-      try {
-        const RES = await fetch(`/api/cmd?q=${encodeURIComponent(CLN)}`);
-        if (!RES.ok) throw new Error();
-        OUT.innerHTML += `\n<span>${await RES.text()}</span>`;
-      } catch {
-        OUT.innerHTML += `\n` + (CLN.toLowerCase() === 'help' ? 'Available commands: status, clear, reboot' : `<span style="color:var(--dim)">command executed: ${CLN}</span>`);
-      }
-      TRM.scrollTop = TRM.scrollHeight;
-    };
-
-    const TRMELEM = document.getElementById('TERM');
-    ['dragenter', 'dragover'].forEach(EV => TRMELEM.addEventListener(EV, E => { E.preventDefault(); TRMELEM.classList.add('DRAG'); }));
-    ['dragleave', 'drop'].forEach(EV => TRMELEM.addEventListener(EV, E => { E.preventDefault(); TRMELEM.classList.remove('DRAG'); }));
-    TRMELEM.addEventListener('drop', E => { if (E.dataTransfer.files.length) PRSBIN(E.dataTransfer.files[0]); });
-
-    const PRSBIN = FIL => {
-      const OUT = document.getElementById('CLIOUT'), TRM = document.getElementById('TERM');
-      if (FIL.name.endsWith('.bin')) {
-        OUT.innerHTML += `\n<span style="color:var(--y)">Anusmarak ~ ❯</span> upload_firmware ${FIL.name}`;
-        const XHR = new XMLHttpRequest(); XHR.open('POST', '/update', true);
-        XHR.upload.onprogress = E => { if (E.lengthComputable) OUT.innerHTML += `\n<span style="color:var(--b)">[OTA] Progress: ${Math.round((E.loaded / E.total) * 100)}%</span>`; TRM.scrollTop = TRM.scrollHeight; };
-        XHR.onload = () => OUT.innerHTML += XHR.status === 200 ? '\n<span style="color:var(--g)">[OTA Success] Rebooting...</span>' : '\n<span style="color:var(--r)">[OTA Failed]</span>';
-        const FRM = new FormData(); FRM.append('update', FIL); XHR.send(FRM);
-      } else {
-        OUT.innerHTML += `\n<span style="color:var(--y)">Anusmarak ~ ❯</span> inspect ${FIL.name}`;
-      }
-      TRM.scrollTop = TRM.scrollHeight;
-    };
-
-    setInterval(async () => { try { const RES = await fetch('/Telemetry'); if (RES.ok) UPDTDSH(await RES.json()); } catch {} }, 2000);
-    LDLG('Utilities');
-  </script>
+      setInterval(async () => { const T0 = performance.now(); try { const RES = await fetch('/Telemetry'); if (RES.ok) { const DAT = await RES.json(); DAT.Latency = Math.round(performance.now() - T0); UPDTDSH(DAT); } } catch {} }, 2000);
+      LDLG('Orchestrator');
+    </script>
 </body>
 </html>
