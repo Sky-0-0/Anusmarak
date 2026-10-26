@@ -48,9 +48,9 @@ env/
 *~
 
 # ------- OS & Metadata -------
-Desktop.ini
 Thumbs.db
 ehthumbs.db
 .DS_Store
 .AppleDouble
 .LSOverride
+CACHEDIR.TAG
