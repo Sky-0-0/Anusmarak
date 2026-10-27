@@ -63,7 +63,7 @@ The intended audience is the development team and the course instructor.
 
 Product Name: Anusmarak (Sanskrit: "one who remembers") Team Name: Engram
 
-Anusmarak is a battery-powered, fully autonomous mobile robot for indoor use. On power-up it cruises forward on a skid-steer platform with no external commands. A 100Hz PID controller on gyroscope yaw rate holds the heading, and a 10Hz PD law on ultrasonic range slows the robot as an obstacle nears. At the standoff distance it runs an escape manoeuvre: it probes left and right and turns toward the clearer side, or turns back if both sides are blocked. A round TFT shows a face with blinking eyes ringed by a battery gauge. A Wi-Fi dashboard shows telemetry and logs and offers over-the-air update, restart and shutdown. Events are logged to flash.
+Anusmarak is a battery-powered, fully autonomous mobile robot for indoor use. On power-up it cruises forward on a skid-steer platform with no external commands. A 100Hz PID controller on gyroscope yaw rate holds the heading, and a 10Hz PD law on ultrasonic range slows the robot as an obstacle nears. At the standoff distance it runs an escape manoeuvre: it probes left and right and turns toward the clearer side, or turns back if both sides are blocked. A round TFT shows a face with blinking eyes ringed by a battery gauge. A Wi-Fi dashboard shows telemetry and logs and offers over-the-air update and restart. Events are logged to flash.
 
 The system is not a learning system. It does not adapt model weights, infer user intent or modify its behaviour from history. Its memory is strictly event logging to flash; the record of the most recent run stays readable until the next boot.
 
@@ -123,6 +123,29 @@ Section 2 describes the product in context. Section 3 specifies the requirements
 
 Anusmarak is a self-contained system with no dependency on external compute. Control, logging and motor actuation run on the onboard ESP32-S3. The robot joins a Wi-Fi hotspot (the team laptop) as a station so a browser on the same network can open the dashboard. The page loads its chart library and fonts from public CDNs, so the browser (not the robot) needs internet access; the hotspot provides it. No cloud service is needed for operation.
 
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":40,"rankSpacing":60,"padding":14}}}%%
+flowchart LR
+  SENS["<b>Sensors and inputs</b><br/>HC-SR04 ultrasonic range<br/>MPU-6050 gyro, I2C<br/>battery divider, ADC1"]
+  MCU["<b>ESP32-S3 N16R8</b><br/>ESP-IDF 6.1 · C++23<br/>Drive · UI · Network<br/>Orchestrator · Logger"]
+  ACT["<b>Outputs</b><br/>2 × L298N, 4 DC motors<br/>GC9A01 round TFT<br/>on-board RGB LED"]
+  FS[("<b>LittleFS</b><br/>2 log files")]
+  WEB(["<b>Browser on the hotspot</b><br/>dashboard · OTA · logs"])
+  SENS --> MCU --> ACT
+  MCU --> FS
+  MCU <-->|"Wi-Fi 2.4 GHz"| WEB
+  classDef sense fill:#e3f2fd,stroke:#1565c0,color:#0d2a4a
+  classDef core fill:#ede7f6,stroke:#5e35b1,color:#1f1147
+  classDef act fill:#fff3e0,stroke:#e65100,color:#4a2100
+  classDef ext fill:#e8f5e9,stroke:#2e7d32,color:#10300f
+  class SENS sense
+  class MCU core
+  class ACT,FS act
+  class WEB ext
+```
+
+_System context: what the robot senses, drives and talks to._
+
 ### 2.2 Product Functions
 
 - Autonomous Navigation: Cruise forward with PID heading hold on MPU-6050 gyroscope yaw rate at 100Hz; slow down with a 10Hz PD law on HC-SR04 range; at the standoff distance run an escape manoeuvre (probe left, probe right, turn toward the clearer side, or turn back).
@@ -130,9 +153,9 @@ Anusmarak is a self-contained system with no dependency on external compute. Con
 - Face and Battery Ring: Blinking eyes on a round 240×240 TFT, surrounded by a ring whose colour shows the battery band. The TFT shows no text.
 - Battery Monitoring: Filtered battery voltage and percentage from a divider on ADC1; a robot expression (HAPPY, WORRIED, SLEEPY, DEAD) derived from battery, distance and motion.
 - Session Logging: Timestamped text records in two LittleFS log files, cleared at the start of every run.
-- Wi-Fi Dashboard: Telemetry, USD range chart, log viewer, firmware upload (OTA), restart and light-sleep shutdown.
+- Wi-Fi Dashboard: Telemetry, USD range chart, log viewer, firmware upload (OTA) and restart.
 - Self-Test and Status: Power-on check of every device; an on-board RGB LED shows the result.
-- Hardware Wake Switch: A chassis switch on GPIO 9 that wakes the robot from shutdown.
+- Power Switch: A rocker switch in the pack positive lead switches the robot on and off. There is no software shutdown and no wake input.
 
 ### 2.3 User Characteristics
 
@@ -194,6 +217,33 @@ Priority levels: High — required for a functional demo; Medium — required fo
 
 #### 3.1.1 Autonomous Navigation
 
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":45,"padding":12}}}%%
+flowchart LR
+  subgraph HL["Heading loop · 100 Hz"]
+    direction LR
+    GYRO["MPU-6050<br/>gyro Z rate"] --> HDG["Heading estimate<br/>∫ rate − bias"]
+    HDG --> PID["PID on error<br/>setpoint − heading<br/>output ±127"]
+  end
+  subgraph DL["Distance loop · 10 Hz"]
+    direction LR
+    USD["HC-SR04<br/>range"] --> PD["PD law on<br/>distance − standoff"]
+    PD --> BASE["Base speed<br/>DEFAULTSPEED × scale"]
+  end
+  PID -->|"differential"| MIX{{"Mix"}}
+  BASE --> MIX
+  MIX --> LM["Left pair<br/>base − diff"]
+  MIX --> RM["Right pair<br/>base + diff"]
+  classDef a fill:#e3f2fd,stroke:#1565c0,color:#0d2a4a
+  classDef b fill:#ede7f6,stroke:#5e35b1,color:#1f1147
+  classDef c fill:#fff3e0,stroke:#e65100,color:#4a2100
+  class GYRO,USD a
+  class HDG,PID,PD,BASE,MIX b
+  class LM,RM c
+```
+
+_Control structure: the 100Hz heading loop sets the left/right differential, the 10Hz distance loop sets the base speed._
+
 |ID|Requirement|Priority|Verification|
 |---|---|---|---|
 |FR-01|When the motors, gyroscope and ultrasonic sensor pass the power-on self-test, the system shall start the drive task and cruise forward without any external command.|High|Robot moves within 15 seconds of power-on with nothing connected|
@@ -205,6 +255,33 @@ Priority levels: High — required for a functional demo; Medium — required fo
 |FR-07|A pivot shall rotate the robot in place at a fixed escape PWM and end when the heading error is below the turn tolerance (default 2°) or after 3 seconds. A timed-out probe pivot abandons the probe and turns back; a timed-out final pivot ends the manoeuvre where it stopped. A timeout is logged.|High|Pivots complete or time out; a Warn entry is logged on timeout|
 |FR-08|When the halt flag is set (FR-24), or when a gyroscope read fails, the system shall de-energise all motor outputs within one control pass (10ms) and report STOP. A gyroscope failure is logged once. When the cause clears, the heading is re-latched and cruise restarts.|High|Motors stop within 100ms of halt per NFR-03; Hardware.log shows the gyroscope warning|
 |FR-09|The system shall log each escape (measured distance), the left and right probe distances, each pivot timeout and each gyroscope failure to Hardware.log.|Medium|Entries present after an obstacle is encountered|
+
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"}}}%%
+stateDiagram-v2
+  direction TB
+  [*] --> Cruise
+  Cruise: Cruise
+  Cruise: heading hold and PD slow-down
+  Cruise --> PivotLeft: distance ≤ standoff
+  PivotLeft: Pivot left 90°
+  PivotLeft --> ProbeLeft: on target or timeout
+  ProbeLeft: Stop and measure left
+  ProbeLeft --> PivotRight: distance read
+  PivotRight: Pivot to 90° right
+  PivotRight --> ProbeRight: on target
+  ProbeRight: Stop and measure right
+  ProbeRight --> FinalPivot: distance read
+  FinalPivot: Pivot to the chosen heading
+  FinalPivot --> Cruise: re-latch heading
+  note right of FinalPivot
+    left > right: turn left
+    otherwise: turn right
+    both ≤ standoff: turn back 180°
+  end note
+```
+
+_Escape manoeuvre (FR-06, FR-07). Stage numbers and timings are in SDD §4.3._
 
 ---
 
@@ -256,7 +333,7 @@ Note: The system logs discrete events to flash. It does not perform model adapta
 |FR-21|The system shall join a WPA2-PSK hotspot as a station, retry on every disconnect, and advertise the mDNS name `Anusmarak`. Boot waits at most 4 seconds for an address; an unreachable hotspot does not stop the robot.|Medium|Robot reconnects after the hotspot is restarted|
 |FR-22|The system shall serve HTTP on port 80: `GET /` (dashboard), `GET /Logs/<name>.log` (log file text) and `GET /Telemetry` (JSON: battery percentage and voltage, chip temperature, expression, RSSI, exception list, uptime in seconds, ultrasonic distance). The dashboard polls telemetry every 2 seconds, charts the last 60 distance samples, shows both logs in tabs, and shows OFFLINE after 4 seconds without telemetry.|Medium|Dashboard loads on a phone on the hotspot and updates|
 |FR-23|`POST /OTA` shall write the uploaded image to the inactive OTA slot and, on success, reboot into it. On failure the running image is unchanged and the robot resumes. A new image that does not reach the end of boot shall be rolled back on the next reset.|Medium|A good image boots; an interrupted upload leaves the robot running; a crashing image is rolled back|
-|FR-24|`GET /Restart` and `GET /Shutdown` shall first halt the robot (motors off, display paused, battery sampling paused) and wait 100ms. Restart then resets the chip. Shutdown turns the backlight off and enters light sleep until GPIO 9 is pulled low, then resumes. The dashboard asks for confirmation before sending either.|Medium|Motors stop on both; Shutdown wakes from the chassis switch|
+|FR-24|`GET /Restart` shall first halt the robot (motors off, display paused, battery sampling paused), wait 100ms and reset the chip. The dashboard asks for confirmation before sending it.|Medium|Motors stop, then the robot restarts|
 
 ---
 
@@ -277,7 +354,7 @@ Note: The system logs discrete events to flash. It does not perform model adapta
 |ID|Interface|Specification|
 |---|---|---|
 |UI-01|TFT Display|GC9A01 round colour TFT, 240×240 pixels, SPI; face and battery ring only|
-|UI-02|Web Dashboard|HTTP port 80 on the hotspot network; telemetry, log viewer, OTA, restart and shutdown|
+|UI-02|Web Dashboard|HTTP port 80 on the hotspot network; telemetry, log viewer, OTA and restart|
 |UI-03|Console|USB Serial/JTAG; log lines mirrored as output only (the robot accepts no serial input)|
 |UI-04|RGB LED|On-board WS2812 (GPIO 48); boot self-test result|
 
@@ -293,7 +370,6 @@ All GPIO assignments are those in Appendix B.
 |I2C Bus|GPIO 10 (SCL), GPIO 11 (SDA)|I2C @ 400kHz|MPU-6050 (0x68)|Only device on the bus|
 |TFT Display|GPIO 17 (SCL), 18 (SDA), 47 (RES), 21 (DC), 41 (CS), 40 (BLK)|SPI2 @ 40MHz, write-only|GC9A01|240×240 round, RGB565; backlight driven by firmware|
 |Obstacle Sensor|GPIO 42 (TRIG), GPIO 3 (ECHO)|GPIO (pulse timing)|HC-SR04|TRIG: 10µs pulse; ECHO outputs 5V, divided to 3.3V by a 1kΩ/2kΩ divider (Appendix F.4); timed by a GPIO interrupt on Core 0|
-|Wake Switch|GPIO 9|GPIO, pull-up|Chassis switch|Normally high; low wakes the robot from Shutdown|
 |RGB LED|GPIO 48|RMT (led_strip)|On-board WS2812|Boot status|
 |USB|GPIO 19 (D−), GPIO 20 (D+)|USB Serial/JTAG|USB-C|Flashing and log console; reserved|
 |Flash and PSRAM (internal)|GPIO 26–32, GPIO 35–37|—|Flash SPI; N16R8 octal PSRAM|Reserved; not available|
@@ -337,7 +413,7 @@ The targets below are design targets. A target that has not been measured is not
 |ID|Requirement|
 |---|---|
 |NFR-10|The Wi-Fi station shall join WPA2-PSK networks only.|
-|NFR-11|The HTTP interface exposes restart, shutdown and OTA without authentication. This is a deliberate decision: the robot runs only on a private exhibition hotspot. The risk is accepted (Appendix E).|
+|NFR-11|The HTTP interface exposes restart and OTA without authentication. This is a deliberate decision: the robot runs only on a private exhibition hotspot. The risk is accepted (Appendix E).|
 
 #### 3.3.4 Portability
 
@@ -358,36 +434,36 @@ The targets below are design targets. A target that has not been measured is not
 
 ## Appendix A: Hardware Specifications and Budget
 
-| Component         | Model                              | Qty | Unit (₹) | Total (₹) | Status           |
-| ----------------- | ---------------------------------- | --- | -------- | --------- | ---------------- |
-| Microcontroller   | ESP32-S3-WROOM-1-N16R8             | 1   | 999      | 999       | ✅ Ordered        |
-| Chassis + Motors  | 4WD platform with TT motors (3–6V) | 1   | 539      | 539       | ✅ Purchased      |
-| Motor Driver      | L298N dual H-bridge (Module 1)     | 1   | 199      | 199       | ✅ Ordered        |
-| Motor Driver      | L298N dual H-bridge (Module 2)     | 1   | 199      | 199       | ✅ Ordered        |
-| TFT Display       | GC9A01 round 240×240 SPI           | 1   | 826      | 826       | ✅ Ordered        |
-| IMU               | MPU-6050 breakout                  | 1   | 289      | 289       | ✅ Ordered        |
-| Audio I/O Module  | MAX98357A + INMP441 combo          | 1   | 439      | 439       | **Sunken Cost**  |
-| Speaker           | 4Ω 3W (pack of 2)                  | 1   | 256      | 256       | **Sunken Cost**  |
-| Ultrasonic Sensor | HC-SR04                            | 1   | 150      | 150       | ✅ Ordered        |
-| Resistors         | 390kΩ, 1% metal film, ¼W           | 2   | 5        | 10        | **Local Market** |
-| Resistors         | 100kΩ, 1% metal film, ¼W           | 2   | 5        | 10        | **Local Market** |
-| Resistors         | 1kΩ, 1% metal film, ¼W             | 3   | 5        | 15        | **Local Market** |
-| Resistors         | 2kΩ, 1% metal film, ¼W             | 2   | 5        | 10        | **Local Market** |
-| Resistors         | 10kΩ, 5%, ¼W                       | 6   | 5        | 30        | **Local Market** |
-| Resistors         | 4.7kΩ, 5%, ¼W                      | 3   | 5        | 15        | **Local Market** |
-| Capacitors        | 100nF ceramic                      | 8   | 5        | 40        | **Local Market** |
-| Capacitors        | 100µF, ≥16V electrolytic           | 2   | 5        | 10        | **Local Market** |
-| Capacitors        | 220µF, ≥25V electrolytic           | 3   | 5        | 15        | **Local Market** |
-| Test Equipment    | Digital multimeter                 | 1   | 400      | 400       | **Local Market** |
-| Battery Cells     | 18650 Li-ion 1200mAh (×3)          | 3   | 40       | 120       | ✅ Ordered        |
-| Battery Charger   | USB-C to 12.6V 3S Boost Charger    | 1   | 175      | 175       | ✅ Ordered        |
-| Protection BMS    | HW-375 3S 20A BMS                  | 1   | 69       | 69        | ✅ Ordered        |
-| Buck Converter    | MP1584EN 3A DC-DC Step-Down        | 1   | 123      | 123       | ✅ Ordered        |
-| Total             |                                    |     |          | ₹4,938    |                  |
-| Budget Ceiling    |                                    |     |          | ₹5,000    |                  |
-| Headroom          |                                    |     |          | ₹62       |                  |
+|Component|Model|Qty|Unit (₹)|Total (₹)|Status|
+|---|---|---|---|---|---|
+|Microcontroller|ESP32-S3-WROOM-1-N16R8|1|999|999|✅ Ordered|
+|Chassis + Motors|4WD platform with TT motors (3–6V)|1|539|539|✅ Purchased|
+|Motor Driver|L298N dual H-bridge (Module 1)|1|199|199|✅ Ordered|
+|Motor Driver|L298N dual H-bridge (Module 2)|1|199|199|✅ Ordered|
+|TFT Display|GC9A01 round 240×240 SPI|1|826|826|✅ Ordered|
+|IMU|MPU-6050 breakout|1|289|289|✅ Ordered|
+|Audio I/O Module|MAX98357A + INMP441 combo|1|439|439|**Sunken Cost**|
+|Speaker|4Ω 3W (pack of 2)|1|256|256|**Sunken Cost**|
+|Ultrasonic Sensor|HC-SR04|1|150|150|✅ Ordered|
+|Resistors|390kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
+|Resistors|100kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
+|Resistors|1kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
+|Resistors|2kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
+|Resistors|10kΩ, 5%, ¼W|6|5|30|**Local Market**|
+|Resistors|4.7kΩ, 5%, ¼W|3|5|15|**Local Market**|
+|Capacitors|100nF ceramic|8|5|40|**Local Market**|
+|Capacitors|100µF, ≥16V electrolytic|2|5|10|**Local Market**|
+|Capacitors|220µF, ≥25V electrolytic|3|5|15|**Local Market**|
+|Test Equipment|Digital multimeter|1|400|400|**Local Market**|
+|Battery Cells|18650 Li-ion 1200mAh (×3)|3|40|120|✅ Ordered|
+|Battery Charger|USB-C to 12.6V 3S Boost Charger|1|175|175|✅ Ordered|
+|Protection BMS|HW-375 3S 20A BMS|1|69|69|✅ Ordered|
+|Buck Converter|MP1584EN 3A DC-DC Step-Down|1|123|123|✅ Ordered|
+|Total||||₹4,933||
+|Budget Ceiling||||₹5,000||
+|Headroom||||₹67||
 
-Sunken Cost items were purchased for the dropped audio feature and are not used; they stay in the total because the money is spent. Resistor roles are in Appendix F.5 and their ratings in Appendix F.6; capacitor roles and ratings are in Appendix F.7; every resistor and capacitor is priced at ₹5. Resistor and capacitor quantities are purchase quantities and include spares (the design needs 1 × 390kΩ, 1 × 100kΩ, 1 × 1kΩ, 1 × 2kΩ, 4 × 10kΩ, 2 × 4.7kΩ, 5 × 100nF, 1 × 100µF and 2 × 220µF); the third 1kΩ is for a series resistor on BLK at first power-up (F.5). The multimeter is a bench tool for the checks in Appendix F.8; its ₹400 price is an estimate, and the budget ceiling is exceeded if it costs more than ₹462.
+Sunken Cost items were purchased for the dropped audio feature and are not used; they stay in the total because the money is spent. Resistor roles are in Appendix F.5 and their ratings in Appendix F.6; capacitor roles and ratings are in Appendix F.7; every resistor and capacitor is priced at ₹5. Resistor and capacitor quantities are purchase quantities and include spares (the design needs 1 × 390kΩ, 1 × 100kΩ, 1 × 1kΩ, 1 × 2kΩ, 4 × 10kΩ, 2 × 4.7kΩ, 5 × 100nF, 1 × 100µF and 2 × 220µF); the second 1kΩ is a spare. The multimeter is a bench tool for the checks in Appendix F.8; its ₹400 price is an estimate, and the budget ceiling is exceeded if it costs more than ₹462.
 
 ---
 
@@ -406,7 +482,7 @@ Complete pin assignment for the ESP32-S3-WROOM-1-N16R8, taken from the firmware 
 |**6**|Motor C IN2|Motors (left)|Rear-left direction|
 |**7**|Motor B IN1|Motors (right)|Front-right direction|
 |**8**|Motor B IN2|Motors (right)|Front-right direction|
-|**9**|Wake switch|System|Chassis switch, pull-up, active low; light-sleep wake source|
+|**9**|Spare|—|Unassigned|
 |**10**|I2C SCL|MPU-6050|400kHz|
 |**11**|I2C SDA|MPU-6050|Only device on the bus|
 |**12**|Motor D IN1|Motors (right)|Rear-right direction|
@@ -478,6 +554,24 @@ Enabled in the build and initialised at boot, but the firmware allocates nothing
 |Preparation|Oct 29–Nov 4|Poster, presentation, soak|Poster and physical presentation ready; 2-hour unattended run completes; log files consistent|
 |Submission|Nov 5|Final submission|Submitted|
 
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"13px"}}}%%
+gantt
+  title Development timeline 2026
+  dateFormat YYYY-MM-DD
+  axisFormat %b %d
+  todayMarker off
+  section Build
+  Sprint 0 · hardware       :done, s0, 2026-09-09, 7d
+  Sprint 1 · control loops  :done, s1, 2026-09-16, 7d
+  Sprint 2 · autonomy, UI, dashboard :active, s2, 2026-09-23, 36d
+  section Finish
+  Poster, soak :p1, 2026-10-29, 7d
+  Submission   :milestone, m1, 2026-11-05, 0d
+```
+
+_Sprint timeline (Appendix D table above)._
+
 ---
 
 ## Appendix E: Risk Assessment
@@ -498,7 +592,7 @@ Enabled in the build and initialised at boot, but the firmware allocates nothing
 |R-10|HC-SR04 5V ECHO applied directly to GPIO 3 damages the ESP32-S3|Low|High|
 |R-11|Gyroscope bias or I2C start-up failure disables autonomy (Drive refuses to start)|Low|High|
 |R-12|A bad or interrupted OTA image|Low|Medium|
-|R-13|Unauthenticated restart, shutdown and OTA endpoints are misused|Low|Low|
+|R-13|Unauthenticated restart and OTA endpoints are misused|Low|Low|
 |R-14|ESP32-S3 PSRAM instability (chip revision v0.2) at boot|Low|High|
 
 ### Mitigation and Contingency
@@ -536,6 +630,37 @@ Pack (3S1P, 9.0–12.6V, 11.1V nominal, HW-375 BMS) → MP1584EN buck (input 4.5
 |HC-SR04|5V rail|
 |L298N motor supply (VS), both modules|Pack, after the BMS output (decision in F.2)|
 |L298N logic 5V|Each module's on-board regulator, fed from VS with the 5V-enable jumper fitted; the +5V terminal is an output and is not connected to the buck|
+
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":40,"padding":12}}}%%
+flowchart TB
+  CELLS["3 × 18650 · 3S1P<br/>9.0 to 12.6 V"] --> BMS["HW-375 BMS<br/>3S 20A"]
+  CHG["CAAV-330S-A<br/>USB-C charger"] -->|"charge"| BMS
+  BMS --> FUSE["Fuse 5 to 7.5 A<br/>main switch"]
+  FUSE --> VSW(["VSW · pack voltage"])
+  VSW --> L1["L298N 1 · VS<br/>C3 220 µF<br/>own 78M05 logic"]
+  VSW --> L2["L298N 2 · VS<br/>C4 220 µF<br/>own 78M05 logic"]
+  VSW --> BUCK["MP1584EN buck<br/>5.00 V · C2 100 µF"]
+  VSW --> DIV["Divider 390k / 100k<br/>to GPIO 1"]
+  L1 --> M1["Left motors A, C"]
+  L2 --> M2["Right motors B, D"]
+  BUCK --> V5(["5 V rail"])
+  V5 --> ESP["ESP32-S3<br/>5V pin"]
+  V5 --> SONAR["HC-SR04"]
+  ESP --> V33(["3.3 V"])
+  V33 --> IMU["GY-521"]
+  V33 --> TFT["GC9A01 TFT"]
+  classDef src fill:#ffebee,stroke:#c62828,color:#4a0b0b
+  classDef rail fill:#fff8e1,stroke:#f9a825,color:#4a3300
+  classDef load fill:#e8f5e9,stroke:#2e7d32,color:#10300f
+  classDef mod fill:#e0f7fa,stroke:#00838f,color:#033b40
+  class CELLS,BMS,CHG,FUSE src
+  class VSW,V5,V33 rail
+  class L1,L2,BUCK,DIV mod
+  class M1,M2,ESP,SONAR,IMU,TFT load
+```
+
+_Power tree. Wiring diagrams are in SDD §6.4._
 
 ### F.2 Power Budget and Runtime
 
@@ -630,8 +755,7 @@ All resistors in the design:
 
 - R5–R8: from reset until `Drive::Initialize()` sets them low (mount, hardware and NVS set-up come first), the GPIOs are inputs with no pull. A floating EN with a floating IN can briefly drive a motor. L298 enable inputs leak about 10µA at low level and read low below about 1.5V (verify in the datasheet), so the largest usable pull-down is about 150kΩ; 10kΩ leaves a 15× margin and draws 0.33mA when the pin is high.
 - R9, R10: the firmware enables only the internal pull-ups, about 45kΩ. Rise time t_r = 0.8473 × R × C_bus. With 45kΩ and 50pF it is 1.9µs, which fails the 300ns limit of 400kHz operation (and 1000ns at 100kHz). With 4.7kΩ it is 199ns at 50pF and 398ns at 100pF. The largest pull-up that meets 300ns is 7.1kΩ at 50pF and 3.5kΩ at 100pF. Many GY-521 breakouts carry 4.7kΩ pull-ups; confirm by measuring SDA to 3.3V.
-- Wake switch (GPIO 9): the internal pull-up is enough; no resistor is needed.
-- TFT backlight (GPIO 40): the GC9A01 module has a transistor on BLK, so GPIO 40 drives it directly; no series resistor is fitted. The rest of the BLK circuit has not been confirmed, so at first power-up fit a spare 1kΩ in series with BLK; it is harmless for a transistor input and protects GPIO 40 if BLK is a bare LED. If the backlight is on before the first frame or off after it, the polarity is inverted: correct it in firmware.
+- TFT backlight (GPIO 40): GPIO 40 drives BLK directly and no series resistor is fitted. Measured with a multimeter on the bench: BLK reads open in diode mode against both GND and VCC in both directions, and the current into BLK with the backlight lit is 0.40mA, so BLK is a high-impedance input (gate or base) and far below the 20mA limit of an ESP32-S3 pin. If the backlight is on before the first frame or off after it, the polarity is inverted: correct it in firmware.
 
 Wiring checks that are not resistors:
 
@@ -667,9 +791,15 @@ R1 and R2 see at most 10V, far below the voltage rating of any ¼W resistor. Buy
 - C3 and C4 are rated ≥25V because the pack reaches 12.6V; a 16V part leaves too little margin.
 - Observe polarity on all electrolytic capacitors (C2, C3, C4).
 - Many MP1584EN and L298N modules already carry on-board capacitors; check them, but C2, C3 and C4 are still fitted.
-- The wake switch needs no debounce capacitor: it only wakes the robot from light sleep.
 
 ### F.8 Expected Measurements
+
+**Wiring diagram 1: Pack, HW-375 BMS, Charger and main switch:**
+![Pack Wiring](PackWiring.png)
+
+**Wiring diagram 2: Power Distribution after the main switch:**
+![Power Distribution](Distribution.png)
+
 
 Bench checks with a multimeter, in the order to do them. Power off for every "before first power" check. Nothing here has been measured yet; these are the values to expect.
 

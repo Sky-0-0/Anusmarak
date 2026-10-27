@@ -32,12 +32,9 @@
     .KPIVAL{font-family:'Syne',sans-serif;font-weight:700;font-size:22px;line-height:1;margin-bottom:4px}
     .KPISB{font-size:10px;color:var(--dim)}
 
-    /* Power / E-Stop Buttons */
-    .PWRRW{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .PWRRW{display:grid;grid-template-columns:1fr;gap:12px}
     .BTNPS{width:100%;background:transparent;border:1px solid #2a354a;color:#47c5ff;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:3px;transition:all .2s}
     .BTNPS:hover{background:rgba(71,197,255,.1);border-color:#47c5ff;box-shadow:0 0 24px rgba(71,197,255,.12)}
-    .EStop{width:100%;background:transparent;border:1px solid #4a1a1a;color:#ff6b47;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:3px;transition:all .2s}
-    .EStop:hover{background:rgba(255,107,71,.1);border-color:#ff6b47;box-shadow:0 0 24px rgba(255,107,71,.12)}
     .material-icons-sharp{font-size:16px}
 
     .MACCRD{background:var(--sur);border:1px solid var(--bor);border-radius:10px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.4);display:flex;flex-direction:column}
@@ -91,8 +88,16 @@
     <section>
       <div class="SC"><span class="SCTTL">USD Trend</span><div class="SCLN"></div></div>
       <div class="MACCRD">
-        <div class="MACHDR"><div class="MACDOTS"><div class="MACDOT RED"></div><div class="MACDOT YLW"></div><div class="MACDOT GRN"></div></div><span class="MACTTL">USD Distance Range (60s Window)</span></div>
+        <div class="MACHDR"><div class="MACDOTS"><div class="MACDOT RED"></div><div class="MACDOT YLW"></div><div class="MACDOT GRN"></div></div><span class="MACTTL">USD Distance (60s Window)</span></div>
         <div style="padding:14px 16px;background:#080a0e"><canvas id="DistanceChart" height="110"></canvas></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="SC"><span class="SCTTL">Temperature Trend</span><div class="SCLN"></div></div>
+      <div class="MACCRD">
+        <div class="MACHDR"><div class="MACDOTS"><div class="MACDOT RED"></div><div class="MACDOT YLW"></div><div class="MACDOT GRN"></div></div><span class="MACTTL">Temperature (60s Window)</span></div>
+        <div style="padding:14px 16px;background:#080a0e"><canvas id="TemperatureChart" height="110"></canvas></div>
       </div>
     </section>
 
@@ -120,104 +125,105 @@
       </div>
     </section>
 
-        <section>
+    <section>
       <div class="SC"><span class="SCTTL">Power Controls</span><div class="SCLN"></div></div>
-      <div class="PWRRW">
-        <button class="BTNPS" onclick="SNDCMD('/Restart')"><span class="material-icons-sharp">restart_alt</span>Restart</button>
-        <button class="EStop" id="ShutBtn" onclick="SNDCMD('/Shutdown')"><span class="material-icons-sharp">power_settings_new</span>Shutdown</button>
-      </div>
+      <div class="PWRRW"> <button class="BTNPS" onclick="SNDCMD('/Restart')"><span class="material-icons-sharp">restart_alt</span>Restart</button> </div>
     </section>
+
   </main>
-
   <script>
-      Chart.defaults.color = '#6b7585'; Chart.defaults.borderColor = '#1e2229'; Chart.defaults.font.family = "'DM Mono', monospace"; Chart.defaults.font.size = 11;
+        Chart.defaults.color = '#6b7585'; Chart.defaults.borderColor = '#1e2229'; Chart.defaults.font.family = "'DM Mono', monospace"; Chart.defaults.font.size = 11;
 
-      const MAXPTS = 60;
-      const TIMELBLS = Array(MAXPTS).fill('');
-      const DSTDAT = Array(MAXPTS).fill(null);
+        const MAXPTS = 60; const TIMELBLS = Array(MAXPTS).fill(''); const DSTDAT = Array(MAXPTS).fill(null); const TEMPDAT = Array(MAXPTS).fill(null);
 
-      const DSTC = new Chart(document.getElementById('DistanceChart'), {
-        type: 'line', data: { labels: TIMELBLS, datasets: [{ data: DSTDAT, borderColor: '#47c5ff', backgroundColor: 'rgba(71,197,255,.07)', fill: true, tension: .2, pointRadius: 0, borderWidth: 1.5, spanGaps: true }] },
-        options: { responsive: true, animation: { duration: 150 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(30,34,41,.6)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(30,34,41,.6)' }, min: 0, max: 200 } } }
-      });
+        const DSTC = new Chart(document.getElementById('DistanceChart'), {
+          type: 'line', data: { labels: TIMELBLS, datasets: [{ data: DSTDAT, borderColor: '#47c5ff', backgroundColor: 'rgba(71,197,255,.07)', fill: true, tension: .2, pointRadius: 0, borderWidth: 1.5, spanGaps: true }] },
+          options: { responsive: true, animation: { duration: 150 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(30,34,41,.6)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(30,34,41,.6)' }, min: 0, max: 200 } } }
+        });
 
-      let CL = 'Orchestrator';
-      let LAST_TELEMETRY = 0;
+        const TEMPC = new Chart(document.getElementById('TemperatureChart'), {
+            type: 'line', data: { labels: TIMELBLS, datasets: [{ data: TEMPDAT, borderColor: '#ffb047', backgroundColor: 'rgba(255,176,71,.07)', fill: true, tension: .2, pointRadius: 0, borderWidth: 1.5, spanGaps: true }] },
+            options: { responsive: true, animation: { duration: 150 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(30,34,41,.6)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(30,34,41,.6)' }, min: 0, max: 50, ticks: { stepSize: 5 } } } }
+        });
 
-      const LDLG = async (NAM, EV) => {
-        if (EV) document.querySelectorAll('.TTAB').forEach(B => B.classList.toggle('ACTIVE', B === EV.currentTarget));
-        CL = NAM;
-        const BOX = document.getElementById('LogTerminal');
-        if (Date.now() - LAST_TELEMETRY > 4000) return;
-        try {
-          const RES = await fetch(`/Logs/${NAM}.log`);
-          const TXT = RES.ok ? (await RES.text()).trim() : '';
-          const HTML = TXT || '<div class="SKLBOX"><div class="SKLBAR"></div><span>No Logs Recorded</span></div>';
-          if (BOX.innerHTML !== HTML) {
-            const BTM = BOX.scrollHeight - BOX.scrollTop <= BOX.clientHeight + 40;
-            BOX.innerHTML = HTML;
-            if (BTM) BOX.scrollTop = BOX.scrollHeight;
+        let CL = 'Orchestrator';
+        let LAST_TELEMETRY = 0;
+
+        const LDLG = async (NAM, EV) => {
+          if (EV) document.querySelectorAll('.TTAB').forEach(B => B.classList.toggle('ACTIVE', B === EV.currentTarget));
+          CL = NAM;
+          const BOX = document.getElementById('LogTerminal');
+          if (Date.now() - LAST_TELEMETRY > 4000) return;
+          try {
+            const RES = await fetch(`/Logs/${NAM}.log`);
+            const TXT = RES.ok ? (await RES.text()).trim() : '';
+            const HTML = TXT || '<div class="SKLBOX"><div class="SKLBAR"></div><span>No Logs Recorded</span></div>';
+            if (BOX.innerHTML !== HTML) {
+              const BTM = BOX.scrollHeight - BOX.scrollTop <= BOX.clientHeight + 40;
+              BOX.innerHTML = HTML;
+              if (BTM) BOX.scrollTop = BOX.scrollHeight;
+            }
+          } catch {}
+        };
+
+        setInterval(() => CL && LDLG(CL), 3000);
+
+        const RST = () => {
+          document.getElementById('HDot').className = 'STDOT DOTR';
+          document.getElementById('HLat').textContent = '-- ms';
+          document.getElementById('RSSI').textContent = '-- dBm';
+          document.getElementById('Expression').textContent = '--';
+          document.getElementById('Battery').textContent = '-- %';
+          document.getElementById('Voltage').textContent = '-- V';
+          document.getElementById('Temperature').textContent = '-- °C';
+          document.getElementById('Exceptions').textContent = '--';
+          document.getElementById('HUPT').textContent = 'OFFLINE';
+          document.getElementById('Expression').style.color = 'var(--r)'
+          document.getElementById('Battery').style.color = 'var(--r)'
+          document.getElementById('Temperature').style.color = 'var(--r)'
+          document.getElementById('Exceptions').style.color = 'var(--r)'
+        };
+
+        const UPDTDSH = DAT => {
+          if (!DAT) return;
+          LAST_TELEMETRY = Date.now();
+          if (DAT.Latency != null) document.getElementById('HLat').textContent = DAT.Latency + ' ms';
+          if (DAT.RSSI != null) { document.getElementById('RSSI').textContent = DAT.RSSI + ' dBm'; document.getElementById('HDot').className = 'STDOT ' + (DAT.RSSI > -65 ? 'DOTG' : DAT.RSSI > -80 ? 'DOTY' : 'DOTR'); }
+          if (DAT.Expression != null) { document.getElementById('Expression').textContent = DAT.Expression; document.getElementById('Expression').style.color = DAT.Expression === 'DEAD' ? 'var(--r)' : (DAT.Expression === 'WORRIED' ? 'var(--y)' : (DAT.Expression === 'SLEEPY' ? 'var(--b)' : 'var(--g)')); }
+          if (DAT.Exceptions != null) { document.getElementById('Exceptions').textContent = DAT.Exceptions;
+              let CNT = DAT.Exceptions === 'None' ? 0 : DAT.Exceptions.split(',').length; document.getElementById('ExceptionCount').textContent = CNT + ' Exceptions'; document.getElementById('Exceptions').style.color = CNT === 0 ? 'var(--g)' : (CNT <= 2 ? 'var(--y)' : 'var(--r)');}
+          if (DAT.BPCT != null && DAT.BVLT != null) { document.getElementById('Battery').textContent = DAT.BPCT + '%'; document.getElementById('Voltage').textContent = DAT.BVLT + ' V'; document.getElementById('Battery').style.color = DAT.BPCT > 50 ? 'var(--g)' : (DAT.BPCT > 20 ? 'var(--y)' : 'var(--r)');}
+          if (DAT.Temperature != null) { document.getElementById('Temperature').textContent = DAT.Temperature + '°C'; document.getElementById('Temperature').style.color = DAT.Temperature < 60 ? 'var(--g)' : (DAT.Temperature < 75 ? 'var(--y)' : 'var(--r)');}
+          if (DAT.Uptime != null) {
+            let UPSEC = DAT.Uptime;
+            const PAD = N => String(N).padStart(2, '0');
+            document.getElementById('HUPT').textContent = `${PAD(Math.floor(UPSEC / 3600))}:${PAD(Math.floor((UPSEC % 3600) / 60))}:${PAD(UPSEC % 60)}`;
           }
-        } catch {}
-      };
+          if (DAT.USD != null) { TIMELBLS.push(new Date().toLocaleTimeString()); TIMELBLS.shift(); DSTDAT.push(DAT.USD); DSTDAT.shift(); DSTC.update('none'); }
+          if (DAT.Temperature != null) { TEMPDAT.push(DAT.Temperature); TEMPDAT.shift(); TEMPC.update('none'); }
+        };
 
-      setInterval(() => CL && LDLG(CL), 3000);
+        setInterval(() => {
+          if (Date.now() - LAST_TELEMETRY > 4000) {
+            RST();
+          }
+        }, 1000);
 
-      const RST = () => {
-        document.getElementById('HDot').className = 'STDOT DOTR';
-        document.getElementById('HLat').textContent = '-- ms';
-        document.getElementById('RSSI').textContent = '-- dBm';
-        document.getElementById('Expression').textContent = '--';
-        document.getElementById('Battery').textContent = '-- %';
-        document.getElementById('Voltage').textContent = '-- V';
-        document.getElementById('Temperature').textContent = '-- °C';
-        document.getElementById('Exceptions').textContent = '--';
-        document.getElementById('HUPT').textContent = 'OFFLINE';
-        document.getElementById('Expression').style.color = 'var(--r)'
-        document.getElementById('Battery').style.color = 'var(--r)'
-        document.getElementById('Temperature').style.color = 'var(--r)'
-        document.getElementById('Exceptions').style.color = 'var(--r)'
-      };
+        const SNDCMD = async URL => {
+          if (!confirm(`Are you sure you want to execute: ${URL}?`)) return;
+          try { await fetch(URL); } catch {}
+        };
 
-      const UPDTDSH = DAT => {
-        if (!DAT) return;
-        LAST_TELEMETRY = Date.now();
-        if (DAT.Latency != null) document.getElementById('HLat').textContent = DAT.Latency + ' ms';
-        if (DAT.RSSI != null) { document.getElementById('RSSI').textContent = DAT.RSSI + ' dBm'; document.getElementById('HDot').className = 'STDOT ' + (DAT.RSSI > -65 ? 'DOTG' : DAT.RSSI > -80 ? 'DOTY' : 'DOTR'); }
-        if (DAT.Expression != null) { document.getElementById('Expression').textContent = DAT.Expression; document.getElementById('Expression').style.color = DAT.Expression === 'DEAD' ? 'var(--r)' : (DAT.Expression === 'WORRIED' ? 'var(--y)' : (DAT.Expression === 'SLEEPY' ? 'var(--b)' : 'var(--g)')); }
-        if (DAT.Exceptions != null) { document.getElementById('Exceptions').textContent = DAT.Exceptions;
-            let CNT = DAT.Exceptions === 'None' ? 0 : DAT.Exceptions.split(',').length; document.getElementById('ExceptionCount').textContent = CNT + ' Exceptions'; document.getElementById('Exceptions').style.color = CNT === 0 ? 'var(--g)' : (CNT <= 2 ? 'var(--y)' : 'var(--r)');}
-        if (DAT.BPCT != null && DAT.BVLT != null) { document.getElementById('Battery').textContent = DAT.BPCT + '%'; document.getElementById('Voltage').textContent = DAT.BVLT + ' V'; document.getElementById('Battery').style.color = DAT.BPCT > 50 ? 'var(--g)' : (DAT.BPCT > 20 ? 'var(--y)' : 'var(--r)');}
-        if (DAT.Temperature != null) { document.getElementById('Temperature').textContent = DAT.Temperature + '°C'; document.getElementById('Temperature').style.color = DAT.Temperature < 60 ? 'var(--g)' : (DAT.Temperature < 75 ? 'var(--y)' : 'var(--r)');}
-        if (DAT.Uptime != null) {
-          let UPSEC = DAT.Uptime;
-          const PAD = N => String(N).padStart(2, '0');
-          document.getElementById('HUPT').textContent = `${PAD(Math.floor(UPSEC / 3600))}:${PAD(Math.floor((UPSEC % 3600) / 60))}:${PAD(UPSEC % 60)}`;
-        }
-        if (DAT.USD != null) { TIMELBLS.push(new Date().toLocaleTimeString()); TIMELBLS.shift(); DSTDAT.push(DAT.USD); DSTDAT.shift(); DSTC.update('none'); }
-      };
+        const PRSBIN = F => {
+          if (!F.name.endsWith('.bin')) return;
+          const X = new XMLHttpRequest();
+          X.open('POST', '/OTA', true);
+          X.setRequestHeader('Content-Type', 'application/octet-stream');
+          X.send(F);
+        };
 
-      setInterval(() => {
-        if (Date.now() - LAST_TELEMETRY > 4000) {
-          RST();
-        }
-      }, 1000);
-
-      const SNDCMD = async URL => {
-        if (!confirm(`Are you sure you want to execute: ${URL}?`)) return;
-        try { await fetch(URL); } catch {}
-      };
-
-      const PRSBIN = F => {
-        if (!F.name.endsWith('.bin')) return;
-        const X = new XMLHttpRequest();
-        X.open('POST', '/OTA', true);
-        X.setRequestHeader('Content-Type', 'application/octet-stream');
-        X.send(F);
-      };
-
-      setInterval(async () => { const T0 = performance.now(); try { const RES = await fetch('/Telemetry'); if (RES.ok) { const DAT = await RES.json(); DAT.Latency = Math.round(performance.now() - T0); UPDTDSH(DAT); } } catch {} }, 2000);
-      LDLG('Orchestrator');
-    </script>
+        setInterval(async () => { const T0 = performance.now(); try { const RES = await fetch('/Telemetry'); if (RES.ok) { const DAT = await RES.json(); DAT.Latency = Math.round(performance.now() - T0); UPDTDSH(DAT); } } catch {} }, 2000);
+        LDLG('Orchestrator');
+      </script>
 </body>
 </html>

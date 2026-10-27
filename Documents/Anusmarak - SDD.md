@@ -4,13 +4,13 @@
 
 ---
 
-| Field           | Detail            |
-| --------------- | ----------------- |
-| **Document ID** | ANUSMARAK-SDD-001 |
-| **Version**     | 1.0.0             |
-| **Status**      | Approved          |
-| **Prepared By** | Team Engram       |
-| **Date**        | October 19, 2026  |
+|Field|Detail|
+|---|---|
+|**Document ID**|ANUSMARAK-SDD-001|
+|**Version**|1.0.0|
+|**Status**|Approved|
+|**Prepared By**|Team Engram|
+|**Date**|October 19, 2026|
 
 ---
 
@@ -69,7 +69,7 @@ Definitions from ANUSMARAK-SRS-001 §1.3 apply. Additional terms:
 |**NVS**|Non-Volatile Storage; the ESP-IDF key-value store in flash, required by the Wi-Fi driver|
 |**POST**|Power-on self-test: the check of each device that a class runs in its own `Initialize()`|
 |**Failure mask**|The `uint16_t` kept by `Hardware`; one bit per device reported as failed, 0 when every device passed|
-|**Halt**|The atomic flag in `Hardware` that tells `Drive`, `UI` and `Orchestrator` to stand down (OTA, restart, shutdown)|
+|**Halt**|The atomic flag in `Hardware` that tells `Drive`, `UI` and `Orchestrator` to stand down (OTA, restart)|
 |**Stage**|The state of the `Drive` loop: 0 cruise, 1–5 the escape manoeuvre (§4.3)|
 |**Expression**|HAPPY, WORRIED, SLEEPY or DEAD; computed by `Orchestrator`, published on the dashboard|
 |**Face / Ring**|The two blinking eyes on the TFT / the full-circle battery band at its edge|
@@ -104,7 +104,7 @@ Section 2 states the constraints and coding standards. Section 3 describes the a
 |**Design priorities**|Memory allocation first, then execution speed, then source compactness. A choice that trades one against another is recorded in the affected class's notes|
 |**Constants**|Every constant, enumeration and table that does not change at run time lives in `Utilities/Configuration.hpp`, one namespace per owner (§4.1.1). Classes declare none. There is no runtime configuration file; changing a value means rebuilding|
 |**Construction model**|Each subsystem is a class. The objects are function-local `static` instances inside `Orchestrator::Run()`, constructed in dependency order after LittleFS is mounted, and receive the objects they depend on by reference. `Initialize()` is `void`: each one checks its IDF return codes, reports the device result to `Hardware`, and starts the class's task as its last step. The first `Logger` constructed (inside `Hardware`) creates the log queue and starts `LogTask`; a failure there asserts, because nothing can be logged yet|
-|**Device ownership**|`Hardware` owns the chip temperature sensor, the RGB LED, the battery ADC, the I2C bus and the SPI bus; it also configures the wake pin. `Drive` owns the motors, the gyroscope device on the I2C bus and the USD. `UI` owns the TFT device and its pins. `Network` owns the Wi-Fi station and the HTTP server. The TFT backlight (GPIO 40) is configured by `UI` and switched off and on by `Network` around shutdown. Every other device has one user|
+|**Device ownership**|`Hardware` owns the chip temperature sensor, the RGB LED, the battery ADC, the I2C bus and the SPI bus. `Drive` owns the motors, the gyroscope device on the I2C bus and the USD. `UI` owns the TFT device and its pins. `Network` owns the Wi-Fi station and the HTTP server. The TFT backlight (GPIO 40) is configured and switched on by `UI` only. Every other device has one user|
 |**Allocation**|Task stacks, the log queue and working buffers are allocated once in `Initialize()` (plain `xTaskCreatePinnedToCore`, `xQueueCreate`, `std::array` members of static objects), in internal RAM, with compile-time sizes. Stack sizes are provisional until measured with `uxTaskGetStackHighWaterMark()`|
 |**PSRAM**|Enabled but not used by the firmware (§7.1)|
 |**No dynamic allocation after boot**|Firmware code allocates only inside `Initialize()` calls. Exempt: allocations inside IDF components (Wi-Fi, HTTP server, drivers) and the HTTP handlers (`fopen` in `_Logs`), which run per request|
@@ -154,14 +154,35 @@ Utilities/ — Configuration.hpp (constants); Utilities.hpp/.cpp: Logger, Timer,
 
 Dependencies point strictly downward. This graph is also the construction order in `Orchestrator::Run()`; each object receives the ones it depends on by reference.
 
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":35,"rankSpacing":45,"padding":12}}}%%
+flowchart TB
+  RUN(["Orchestrator::Run · app_main"])
+  HW["Hardware<br/>failure mask · shared atomics<br/>owns ADC, I2C, SPI, RGB, temperature"]
+  LG["Logger<br/>queue · LogTask · 2 files"]
+  ORC["Orchestrator<br/>battery filter · expression"]
+  NET["Network<br/>Wi-Fi · HTTP · OTA · halt"]
+  UI["UI<br/>TFT face and ring"]
+  DRV["Drive<br/>gyro · USD · motors"]
+  RUN -->|"1"| HW
+  HW --> LG
+  RUN -->|"2"| ORC
+  RUN -->|"3"| NET
+  RUN -->|"4"| UI
+  RUN -->|"5"| DRV
+  ORC --> HW
+  NET --> HW
+  UI --> HW
+  DRV --> HW
+  classDef top fill:#ede7f6,stroke:#5e35b1,color:#1f1147
+  classDef mid fill:#e3f2fd,stroke:#1565c0,color:#0d2a4a
+  classDef leaf fill:#fff3e0,stroke:#e65100,color:#4a2100
+  class RUN top
+  class ORC,NET,UI,DRV mid
+  class HW,LG leaf
 ```
-Orchestrator::Run (constructs, in this order)
-  ├── Hardware     → Logger  (first Logger: starts the log queue and task)
-  ├── Orchestrator → Hardware, Logger
-  ├── Network      → Hardware, Logger
-  ├── UI           → Hardware, Logger
-  └── Drive        → Hardware, Logger
-```
+
+_Class dependencies. The numbers are the construction order in `Orchestrator::Run()`; every class also includes `Configuration.hpp`._
 
 `Initialize()` order: `Hardware`, NVS, `Drive`, `UI`, `Network`, `Orchestrator`. `Timer` is a leaf utility; `Run()` and the `Initialize()` methods each use a local instance. `Configuration` is included by every class.
 
@@ -178,6 +199,31 @@ Sorted by effective priority (larger number = higher priority). Priority, core a
 |`OrchTask`|`Orchestrator`|1|3|4KB|10Hz (100ms, `vTaskDelayUntil`); battery, Expression|
 
 The ECHO ISR is pinned to Core 0 and writes an atomic read by `DriveTask`. `DriveTask` is periodic because no MPU-6050 interrupt pin is allocated.
+
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":28,"rankSpacing":70,"padding":14}}}%%
+flowchart LR
+  subgraph C0["Core 0 · hard real time"]
+    ISR["<b>ECHO ISR</b><br/>IRAM"] -->|"_EchoUs"| DT["<b>DriveTask</b><br/>pri 10 · 100 Hz"]
+  end
+  HW[("<b>Hardware atomics</b><br/>_Distance · _Mode<br/>_Pct · _MV<br/>_Expression · _Halt")]
+  subgraph C1["Core 1 · everything else"]
+    UT["<b>UITask</b><br/>pri 5 · 40 Hz"]
+    HT["<b>httpd</b><br/>pri 4"]
+    OT["<b>OrchTask</b><br/>pri 3 · 10 Hz"]
+    LT["<b>LogTask</b><br/>pri 3 · queue-driven"]
+  end
+  C0 <--> HW
+  HW <--> C1
+  classDef c0 fill:#fff3e0,stroke:#e65100,color:#4a2100
+  classDef c1 fill:#e3f2fd,stroke:#1565c0,color:#0d2a4a
+  classDef sh fill:#fff8e1,stroke:#f9a825,color:#4a3300
+  class ISR,DT c0
+  class UT,HT,OT,LT c1
+  class HW sh
+```
+
+_Task and ISR placement by core; tasks share state through `Hardware` atomics (§3.4) and log through the queue to `LogTask`._
 
 ### 3.3 Core Pinning Strategy
 
@@ -283,12 +329,11 @@ Holds the failure mask and the shared state that crosses tasks, and owns the dev
 
 `Initialize()` steps, none of which stops the others:
 
-1. **Pins:** `WAKEPIN` input with pull-up; `ECHOPIN` input with pull-down.
-2. **Temperature:** `temperature_sensor_install` (20–100°C range) and enable. Reported as `TEMPERATURE`.
-3. **RGB:** `led_strip` on GPIO 48 (WS2812, one LED, RMT at 10MHz). Reported as `RGB`.
-4. **Battery:** ADC1 one-shot on ADC1_CH0, 12dB attenuation, curve-fitting calibration. One `Voltage()` read must be above 0; the published millivolts and percentage start from it. Reported as `BATTERY`.
-5. **I2C bus:** master bus on `SCLPIN`/`SDAPIN`, port 0, internal pull-ups, glitch filter 7. Reported as `GYRO` (`Drive` reports again after probing the sensor).
-6. **SPI bus:** SPI2 on the TFT clock and data pins, no MISO, DMA automatic, `max_transfer_sz` of one strip. Reported as `TFT` (`UI` reports again after the device).
+1. **Temperature:** `temperature_sensor_install` (20–100°C range) and enable. Reported as `TEMPERATURE`.
+2. **RGB:** `led_strip` on GPIO 48 (WS2812, one LED, RMT at 10MHz). Reported as `RGB`.
+3. **Battery:** ADC1 one-shot on ADC1_CH0, 12dB attenuation, curve-fitting calibration. One `Voltage()` read must be above 0; the published millivolts and percentage start from it. Reported as `BATTERY`.
+4. **I2C bus:** master bus on `SCLPIN`/`SDAPIN`, port 0, internal pull-ups, glitch filter 7. Reported as `GYRO` (`Drive` reports again after probing the sensor).
+5. **SPI bus:** SPI2 on the TFT clock and data pins, no MISO, DMA automatic, `max_transfer_sz` of one strip. Reported as `TFT` (`UI` reports again after the device).
 
 The device bits and their checks:
 
@@ -322,7 +367,7 @@ Owns the motors, the MPU-6050 and the HC-SR04. One task, `DriveTask`, runs the h
 
 1. **Motors:** the 8 `DIRS` pins as outputs, driven low; one LEDC timer (`PWMBITS`, `PWMHZ`, low-speed) and channels CH0–CH3 on `ENS`. Reported as `MOTORS`.
 2. **Gyro:** MPU-6050 (`GYROADDR`) added on the bus from `Hardware` at `I2CHZ`; woken, ±500°/s, 44Hz low-pass (`GYROINIT`); `WHO_AM_I` checked; `BIASN` stationary gyro-Z samples taken 10ms apart (about 2 seconds) and averaged into `_Bias`. The robot must be stationary at power-on. Reported as `GYRO`.
-3. **USD:** `TRIGPIN` as output (low); `ECHOPIN` as input with an any-edge interrupt; `gpio_install_isr_service(ESP_INTR_FLAG_IRAM)` (already-installed is accepted) and `gpio_isr_handler_add`; one `_Ping()`, then wait `POSTMS` for `_EchoUs` to become non-zero. A working HC-SR04 holds ECHO high about 38ms with nothing in range, so it always completes a pulse inside the window. Reported as `USD`.
+3. **USD:** `TRIGPIN` as output (low); `ECHOPIN` as input with a pull-down and an any-edge interrupt; `gpio_install_isr_service(ESP_INTR_FLAG_IRAM)` (already-installed is accepted) and `gpio_isr_handler_add`; one `_Ping()`, then wait `POSTMS` for `_EchoUs` to become non-zero. A working HC-SR04 holds ECHO high about 38ms with nothing in range, so it always completes a pulse inside the window. Reported as `USD`.
 4. **Task:** if `MOTORS`, `GYRO` or `USD` failed, no task is created and the motor pins stay low. Otherwise `DriveTask` is created with `xTaskCreatePinnedToCore` and a non-capturing lambda passing `this`; a failed creation logs with `Exception`.
 
 `_Task()` pass, every 10ms:
@@ -335,6 +380,39 @@ Owns the motors, the MPU-6050 and the HC-SR04. One task, `DriveTask`, runs the h
 6. Heading PID on `ERR = SET − HDG`: integral clamped to ±`INTEGMAX`, output clamped to ±127 as the differential `D`.
 7. Mix and drive: in stage 0, base `B = max(DEFAULTSPEED × scale × 0.01, MINPWM)`, left `B − D`, right `B + D`, both forward, clamped to 0–255. In a pivot stage, both sides at `ESCAPEPWM`, left forward if `ERR < 0`, right forward if `ERR > 0`. In a settle stage, both off. Publish the mode: FORWARD in stage 0; LEFT or RIGHT in a pivot (by the sign of `ERR`); STOP in a settle.
 
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":35,"rankSpacing":45,"padding":12}}}%%
+flowchart TB
+  S(["Every 10 ms · vTaskDelayUntil"]) --> R["Measure DT<br/>clamp 100 µs to 50 ms<br/>read gyro Z"]
+  R --> Q{"Halted or<br/>read failed?"}
+  Q -->|"yes"| X["Motors off · mode STOP<br/>one Warn on a gyro failure"]
+  Q -->|"no"| W{"Resuming after<br/>a stop?"}
+  W -->|"yes"| L["Stage 0 · latch setpoint<br/>reset integrator and scale"]
+  W -->|"no"| H
+  L --> H["HDG += (raw − bias) ÷ scale × DT"]
+  H --> G["Stage logic<br/>cruise · pivot · settle"]
+  G --> P["PID on SET − HDG<br/>integral ±INTEGMAX · output ±127"]
+  P --> M{"Stage"}
+  M -->|"0 cruise"| M0["base × scale, floor MINPWM<br/>left = base − D · right = base + D"]
+  M -->|"pivot"| M1["both sides at ESCAPEPWM<br/>direction from sign of error"]
+  M -->|"settle"| M2["both sides off"]
+  M0 --> O(["Write LEDC duty · publish mode"])
+  M1 --> O
+  M2 --> O
+  X --> E(["End of pass"])
+  O --> E
+  classDef t fill:#ede7f6,stroke:#5e35b1,color:#1f1147
+  classDef d fill:#fff8e1,stroke:#f9a825,color:#4a3300
+  classDef a fill:#fff3e0,stroke:#e65100,color:#4a2100
+  classDef s fill:#e8f5e9,stroke:#2e7d32,color:#10300f
+  class R,L,H,G,P t
+  class Q,W,M d
+  class X,M0,M1,M2 a
+  class S,O,E s
+```
+
+_One `DriveTask` pass._
+
 Stages:
 
 |Stage|Name|Entry|Exit|
@@ -345,6 +423,29 @@ Stages:
 |3|Pivot right|From stage 2|As stage 1; then stage 4|
 |4|Settle, probe right|From stage 3|As stage 2, then the right distance is read and `SET` is chosen: both ≤ `STANDOFF` → `base − 2×TURNDEG` (turn back); left > right → `base + TURNDEG`; otherwise `base − TURNDEG`. Stage 5|
 |5|Final pivot|From stage 4, or a timed-out probe|As stage 1; the heading is then re-latched and cruise (stage 0) resumes|
+
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"}}}%%
+stateDiagram-v2
+  direction TB
+  [*] --> S0
+  S0: 0 · Cruise
+  S1: 1 · Pivot left
+  S2: 2 · Settle, probe left
+  S3: 3 · Pivot right
+  S4: 4 · Settle, probe right
+  S5: 5 · Final pivot
+  S0 --> S1: every 10th pass, distance ≤ STANDOFF
+  S1 --> S2: within TURNTOL of SET
+  S1 --> S5: TURNTMS timeout, turn back
+  S2 --> S3: 12 passes, left distance read
+  S3 --> S4: within TURNTOL of SET
+  S3 --> S5: TURNTMS timeout, turn back
+  S4 --> S5: 12 passes, right distance read, SET chosen
+  S5 --> S0: within TURNTOL or timeout, re-latch
+```
+
+_Escape stages. Every timeout from a probe pivot goes to stage 5 with the turn-back heading._
 
 Behaviour rules:
 
@@ -391,7 +492,7 @@ Owns the TFT device and its pins. Draws the face and the battery ring. It has no
 
 ### 4.5 Network
 
-Owns the Wi-Fi station and the HTTP server. Also drives the halt protocol for OTA, restart and shutdown.
+Owns the Wi-Fi station and the HTTP server. Also drives the halt protocol for OTA and restart.
 
 |Function|Contract|Implementation|
 |---|---|---|
@@ -402,16 +503,42 @@ Owns the Wi-Fi station and the HTTP server. Also drives the halt protocol for OT
 |`_Logs(REQ)`|`GET /Logs/*`|Opens `/littlefs` + the request URI, streams it in 256-byte chunks as `text/plain`; 404 if it does not open|
 |`_Telemetry(REQ)`|`GET /Telemetry`|Formats a JSON object into a 256-byte stack buffer: `BPCT`, `BVLT`, `Temperature`, `Expression`, `RSSI`, `Exceptions`, `Uptime`, `USD`|
 |`_Restart(REQ)`|`GET /Restart`|Logs, replies, `_Stop()`, `esp_restart()`|
-|`_Shutdown(REQ)`|`GET /Shutdown`|Logs, replies, `_Stop()`, backlight off, enables GPIO wake (`WAKEPIN` low) and starts light sleep. On wake: backlight on, halt flag cleared, logs the resume|
 |`_OTA(REQ)`|`POST /OTA`|`_Stop()`; picks the next update partition and begins; reads the body in 1KB chunks into `esp_ota_write` (a timeout is retried); on success sets the boot partition, replies and restarts after 1 second. On any error aborts, clears the halt flag, logs `Warn` and answers 500|
+
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"}}}%%
+sequenceDiagram
+  participant B as Browser
+  participant N as Network httpd
+  participant H as Hardware _Halt
+  participant D as DriveTask
+  participant U as UITask and OrchTask
+  B->>N: GET /Restart or POST /OTA
+  N->>H: set halt flag
+  Note over N: wait HALTMS 100 ms
+  H-->>D: motors off, mode STOP
+  H-->>U: skip drawing and battery sampling
+  alt Restart
+    N->>B: reply
+    Note over N: esp_restart
+  else OTA success
+    Note over N: write slot, set boot partition
+    N->>B: reply, restart after 1 s
+  else OTA failure
+    N->>H: clear halt flag
+    N->>B: HTTP 500
+  end
+```
+
+_Halt protocol for restart and OTA (§4.5)._
 
 `Initialize()` steps:
 
 1. **Station:** `esp_netif`, default event loop, default station netif; Wi-Fi initialised and started in station mode with the configured `SSID` and `PASS` (WPA2-PSK minimum); `WIFI_PS_MIN_MODEM`; `_Reconnect` registered; `esp_wifi_connect()`.
 2. **Address:** waits up to 4 seconds (40 × 100ms) for an address, so boot time is bounded; logs the address and the MAC. Reported as `WIFI` from the driver set-up result only.
-3. **Services:** skipped when `WIFI` failed. mDNS hostname `Anusmarak`; `httpd_start()` on Core 1 at priority `PRIORITY` with wildcard URI matching; six handlers registered, each receiving the `Network` pointer through `user_ctx`. A failure logs with `Exception`.
+3. **Services:** skipped when `WIFI` failed. mDNS hostname `Anusmarak`; `httpd_start()` on Core 1 at priority `PRIORITY` with wildcard URI matching; five handlers registered, each receiving the `Network` pointer through `user_ctx`. A failure logs with `Exception`.
 
-The dashboard (`Status.html`) polls `/Telemetry` every 2 seconds, shows OFFLINE after 4 seconds without an answer, charts the last 60 distance samples, polls the selected log every 3 seconds, and asks for confirmation before Restart or Shutdown. Its chart library and fonts load from public CDNs, so the browser needs internet access. The restart, shutdown and OTA endpoints are unauthenticated by design (SRS NFR-11).
+The dashboard (`Status.html`) polls `/Telemetry` every 2 seconds, shows OFFLINE after 4 seconds without an answer, charts the last 60 distance samples, polls the selected log every 3 seconds, and asks for confirmation before Restart. Its chart library and fonts load from public CDNs, so the browser needs internet access. The restart and OTA endpoints are unauthenticated by design (SRS NFR-11).
 
 ---
 
@@ -439,6 +566,35 @@ class Orchestrator { static void Run(); void Initialize(); /* private: _Task, _B
 |7|`esp_ota_mark_app_valid_cancel_rollback()`|
 |8|Log `Boot Successful: [{time}] \| Exceptions: [{Summary}]` and return|
 
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":38,"padding":12}}}%%
+flowchart TB
+  A(["app_main · Orchestrator::Run"]) --> B["Mount LittleFS at /littlefs"]
+  B --> C{"Mounted?"}
+  C -->|"no"| X1(["ESP_LOGE · return"])
+  C -->|"yes"| D["Construct Hardware, Orchestrator<br/>Hardware::Initialize · construct Network"]
+  D --> E["NVS init · erase and retry"]
+  E --> F{"NVS ok?"}
+  F -->|"no"| X2(["Exception logged · return<br/>robot stays inert"])
+  F -->|"yes"| G["Construct UI and Drive<br/>Drive · UI · Network · Orchestrator Initialize"]
+  G --> H{"Failure mask = 0?"}
+  H -->|"yes"| I["RGB LED solid green"]
+  H -->|"no"| J["RGB LED five red blinks"]
+  I --> K["Mark app valid<br/>cancel OTA rollback"]
+  J --> K
+  K --> L(["Log Boot Successful with time and exceptions"])
+  classDef s fill:#e8f5e9,stroke:#2e7d32,color:#10300f
+  classDef p fill:#ede7f6,stroke:#5e35b1,color:#1f1147
+  classDef d fill:#fff8e1,stroke:#f9a825,color:#4a3300
+  classDef x fill:#ffebee,stroke:#c62828,color:#4a0b0b
+  class A,L s
+  class B,D,E,G,I,J,K p
+  class C,F,H d
+  class X1,X2 x
+```
+
+_Boot sequence of `Orchestrator::Run()`._
+
 `Initialize()` starts `OrchTask` (`xTaskCreatePinnedToCore`, non-capturing lambda); a failed creation logs with `Exception`.
 
 `_Task()` pass, every `TICKMS` (100ms):
@@ -447,6 +603,52 @@ class Orchestrator { static void Run(); void Initialize(); /* private: _Task, _B
 |---|---|
 |Battery|Once per second (every `SAMPLEMOD` ticks), unless halted, read `Voltage()`; a non-zero reading goes into a ring of `SAMPLES` (5) values. When the ring is full and its spread is under `SPREADMV` (100mV), the average is published as the millivolts and its percentage is computed. The percentage is published only if it is lower than the current value, or higher by more than `JUMPPCT` (10 points, a recharge); each publish is logged with `Metrics`. Samples are taken during motion as well|
 |Expression|Priority DEAD > SLEEPY > WORRIED > HAPPY. DEAD: the failure mask contains `MOTORS`, `GYRO` or `USD`. SLEEPY: the battery check passed and the percentage is at or below `SLEEPYIN` (15), staying until it is at or above `SLEEPYOUT` (20). WORRIED: the drive mode is not FORWARD, or the distance is under `WORRYON` (30cm), staying until it reaches `WORRYOFF` (35cm). Otherwise HAPPY. Published through `Hardware::SetExpression`|
+
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":38,"padding":12}}}%%
+flowchart TB
+  A(["OrchTask tick · every 100 ms"]) --> B{"10th tick and<br/>not halted?"}
+  B -->|"no"| Z(["Wait for next tick"])
+  B -->|"yes"| C["Read Voltage · 8-sample average"]
+  C --> D{"Reading > 0?"}
+  D -->|"no"| Z
+  D -->|"yes"| E["Push into ring of 5 samples"]
+  E --> F{"Ring full and<br/>spread < 100 mV?"}
+  F -->|"no"| Z
+  F -->|"yes"| G["Publish average mV<br/>compute percentage"]
+  G --> H{"Lower than current,<br/>or higher by more than 10 points?"}
+  H -->|"no"| Z
+  H -->|"yes"| I["Publish percentage<br/>log Battery with Metrics"]
+  classDef s fill:#e8f5e9,stroke:#2e7d32,color:#10300f
+  classDef p fill:#ede7f6,stroke:#5e35b1,color:#1f1147
+  classDef d fill:#fff8e1,stroke:#f9a825,color:#4a3300
+  class A,Z s
+  class C,E,G,I p
+  class B,D,F,H d
+```
+
+_Battery sampling and publishing (`OrchTask`)._
+
+```mermaid
+%%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":38,"padding":12}}}%%
+flowchart LR
+  A(["Every 100 ms"]) --> D{"MOTORS, GYRO or<br/>USD failed?"}
+  D -->|"yes"| R1(["DEAD"])
+  D -->|"no"| S{"Battery check passed and<br/>≤ 15 %, held until ≥ 20 %?"}
+  S -->|"yes"| R2(["SLEEPY"])
+  S -->|"no"| W{"Mode not FORWARD, or distance<br/>< 30 cm, held until ≥ 35 cm?"}
+  W -->|"yes"| R3(["WORRIED"])
+  W -->|"no"| R4(["HAPPY"])
+  classDef r fill:#e8f5e9,stroke:#2e7d32,color:#10300f
+  classDef d fill:#fff8e1,stroke:#f9a825,color:#4a3300
+  classDef x fill:#ffebee,stroke:#c62828,color:#4a0b0b
+  class A,R4 r
+  class D,S,W d
+  class R1 x
+  class R2,R3 r
+```
+
+_Expression priority chain; SLEEPY and WORRIED hold until their exit threshold._
 
 Because the drive mode is STOP in every settle stage and LEFT or RIGHT in every pivot, any escape reads as WORRIED; no separate calm state is needed.
 
@@ -540,7 +742,7 @@ Complete pin assignment for the ESP32-S3-WROOM-1-N16R8, read from `Configuration
 |6|Motor C IN2|`Drive`|Rear-left; direction|
 |7|Motor B IN1|`Drive`|Front-right; direction|
 |8|Motor B IN2|`Drive`|Front-right; direction|
-|9|Wake switch|`Hardware`, `Network`|Chassis switch, pull-up, active low; light-sleep wake source|
+|9|Spare|—|Unassigned|
 |10|I2C SCL|`Hardware`, `Drive`|MPU-6050 only, 400kHz|
 |11|I2C SDA|`Hardware`, `Drive`|MPU-6050 only|
 |12|Motor D IN1|`Drive`|Rear-right; direction|
@@ -559,7 +761,7 @@ Complete pin assignment for the ESP32-S3-WROOM-1-N16R8, read from `Configuration
 |35–37|Octal PSRAM (N16R8)|—|**Reserved — unusable on octal-PSRAM modules**|
 |38|Motor D EN|`Drive` (LEDC CH3)|Rear-right; 8-bit PWM; 10kΩ pull-down to GND recommended|
 |39|Spare|—|Unassigned|
-|40|TFT BLK|`UI`, `Network`|Backlight; on after the first clean frame, off during shutdown|
+|40|TFT BLK|`UI`|Backlight; on after the first clean frame|
 |41|TFT CS|`UI`|GC9A01 chip select|
 |42|HC-SR04 TRIG|`Drive`|10µs pulse at 10Hz|
 |43|Spare|—|Unassigned; UART0 TX by default, unused because the console is USB|
@@ -587,6 +789,15 @@ Board caveats: a devkit with a USB-UART bridge may wire GPIO 43/44 to the bridge
 ### 6.4 Wiring Connections
 
 Silkscreen labels are those printed on the parts. Every GND is joined to one common ground (pack negative, buck GND, ESP32 GND, both L298N GND, all sensors).
+
+**Wiring diagram 1: Pack, HW-375 BMS, Charger and main switch:**
+![Pack Wiring](PackWiring.png)
+
+**Wiring diagram 2: Power Distribution after the main switch:**
+![Power Distribution](Distribution.png)
+
+**Wiring diagram 3: Signal Wiring:**
+![Signal Wiring](Signals.png)
 
 **Power**
 
@@ -626,7 +837,6 @@ Silkscreen labels are those printed on the parts. Every GND is joined to one com
 ||SCL, SDA|GPIO 17, 18|
 ||RES, DC, CS, BLK|GPIO 47, 21, 41, 40|
 |Battery divider|Pack+ → 390kΩ (R1) → GPIO 1 → 100kΩ (R2) → GND|100nF (C1) from GPIO 1 → GND|
-|Wake switch|GPIO 9|Switch to GND|
 |EN pull-downs|GPIO 14, 15, 16, 38|10kΩ (R5-R8) each to GND|
 
 **Capacitors**
@@ -638,7 +848,7 @@ Silkscreen labels are those printed on the parts. Every GND is joined to one com
 |C3, C4|220µF electrolytic, 25V|Each L298N +12V to GND|
 |C5-C8|100nF ceramic|Across each motor's two terminals, soldered on the motor tabs|
 
-Expected readings for these connections, and the order to check them in, are in SRS Appendix F.8. On first power-up, fit a spare 1kΩ in series with the GC9A01 BLK wire (SRS F.5).
+Expected readings for these connections, and the order to check them in, are in SRS Appendix F.8.
 
 ---
 
@@ -701,7 +911,7 @@ C++ exceptions are off. Error propagation uses the failure mask.
 |Gyro I2C read failure at run time|Sample dropped; motors off, STOP, one `Warn`; cruise resumes when reads recover|
 |HC-SR04 returns no echo|`_EchoUs` stays 0, read as `USMAX`; no escape follows from silence|
 |Pivot does not reach the target|Timeout after `TURNTMS` with a `Warn`; a probe pivot falls back to a turn back, the final pivot ends where it stopped|
-|Halt (OTA, restart, shutdown)|Motors off, UI paused, battery sampling paused; resumes when the flag clears|
+|Halt (OTA, restart)|Motors off, UI paused, battery sampling paused; resumes when the flag clears|
 |OTA failure|Update aborted, halt flag cleared, `Warn` logged, HTTP 500; the running image is untouched|
 |New image crashes before the end of boot|The bootloader returns to the previous slot on the next reset (app rollback)|
 |Log file fails to open|That target prints to the console only|

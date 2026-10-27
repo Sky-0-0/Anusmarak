@@ -153,7 +153,6 @@ private:
     static esp_err_t _Logs(httpd_req_t* REQ);
     static esp_err_t _Telemetry(httpd_req_t* R);
     static esp_err_t _Restart(httpd_req_t* REQ);
-    static esp_err_t _Shutdown(httpd_req_t* REQ);
     static esp_err_t _OTA(httpd_req_t* REQ);
     Hardware& _Board;
     Logger _Log{"NETWORK", Configuration::Logger::LF::ORCHESTRATOR};

@@ -17,7 +17,6 @@
 #include "esp_event.h"
 #include <esp_rom_sys.h>
 #include <esp_partition.h>
-#include <esp_sleep.h>
 #include "mdns.h"
 
 // ------- Logger -------
@@ -69,7 +68,6 @@ std::string_view Timer::_F(int64_t NS) {
 // ------- Hardware -------
 void Hardware::Initialize() {
     Timer T; using namespace Configuration::Hardware;
-    gpio_set_direction(WAKEPIN, GPIO_MODE_INPUT); gpio_pullup_en(WAKEPIN); gpio_set_direction(ECHOPIN, GPIO_MODE_INPUT); gpio_pulldown_en(ECHOPIN);
     temperature_sensor_config_t TCF = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100); esp_err_t E = temperature_sensor_install(&TCF, &_TSH); if (E == ESP_OK) E = temperature_sensor_enable(_TSH); _Report(Device::TEMPERATURE, E != ESP_OK);
     led_strip_config_t SCF{}; SCF.strip_gpio_num = GPIO_NUM_48; SCF.max_leds = 1; SCF.led_model = LED_MODEL_WS2812; SCF.color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB;
     led_strip_rmt_config_t RCF{}; RCF.clk_src = RMT_CLK_SRC_DEFAULT; RCF.resolution_hz = 10000000; _Report(Device::RGB, led_strip_new_rmt_device(&SCF, &RCF, &_LED) != ESP_OK);
@@ -235,8 +233,8 @@ void Network::Initialize() {
         mdns_init(); mdns_hostname_set("Anusmarak"); mdns_instance_name_set("Anusmarak ESP32-S3");
         httpd_config_t HCF = HTTPD_DEFAULT_CONFIG(); HCF.core_id = CORE; HCF.task_priority = PRIORITY; HCF.uri_match_fn = httpd_uri_match_wildcard; httpd_handle_t SRV = nullptr;
         httpd_uri_t URI{.uri = URIROOT.data(), .method = HTTP_GET, .handler = _HTML, .user_ctx = this}, LURI{.uri = URILOGS.data(), .method = HTTP_GET, .handler = _Logs, .user_ctx = this}, TURI{.uri = URITELEMETRY.data(), .method = HTTP_GET, .handler = _Telemetry, .user_ctx = this},
-        OURI{.uri = "/OTA", .method = HTTP_POST, .handler = _OTA, .user_ctx = this}, RURI{.uri = "/Restart", .method = HTTP_GET, .handler = _Restart, .user_ctx = this}, SURI{.uri = "/Shutdown", .method = HTTP_GET, .handler = _Shutdown, .user_ctx = this};
-        if (httpd_start(&SRV, &HCF) != ESP_OK || httpd_register_uri_handler(SRV, &URI) != ESP_OK || httpd_register_uri_handler(SRV, &LURI) != ESP_OK || httpd_register_uri_handler(SRV, &TURI) != ESP_OK || httpd_register_uri_handler(SRV, &OURI) != ESP_OK || httpd_register_uri_handler(SRV, &RURI) != ESP_OK || httpd_register_uri_handler(SRV, &SURI) != ESP_OK) { _Log.Exception("HTTP server failed"); }}
+        OURI{.uri = "/OTA", .method = HTTP_POST, .handler = _OTA, .user_ctx = this}, RURI{.uri = "/Restart", .method = HTTP_GET, .handler = _Restart, .user_ctx = this};
+        if (httpd_start(&SRV, &HCF) != ESP_OK || httpd_register_uri_handler(SRV, &URI) != ESP_OK || httpd_register_uri_handler(SRV, &LURI) != ESP_OK || httpd_register_uri_handler(SRV, &TURI) != ESP_OK || httpd_register_uri_handler(SRV, &OURI) != ESP_OK || httpd_register_uri_handler(SRV, &RURI) != ESP_OK) { _Log.Exception("HTTP server failed"); }}
     _Log.Metrics("Network Initialized in [{}]", T.Elapsed());
 }
 
@@ -255,10 +253,6 @@ esp_err_t Network::_Telemetry(httpd_req_t* R) {
 
 esp_err_t Network::_Restart(httpd_req_t* R) { auto* N = static_cast<Network*>(R->user_ctx); N->_Log.Metrics("System Restart"); httpd_resp_send(R, "Restarting...", HTTPD_RESP_USE_STRLEN); N->_Stop(); esp_restart(); return ESP_OK; }
 
-esp_err_t Network::_Shutdown(httpd_req_t* R) {
-    auto* N = static_cast<Network*>(R->user_ctx); N->_Log.Metrics("Shutting Down"); httpd_resp_send(R, "Entering Light Sleep...", HTTPD_RESP_USE_STRLEN); N->_Stop(); gpio_set_level(Configuration::Hardware::TFTPINS[5], 0); gpio_wakeup_enable(Configuration::Hardware::WAKEPIN, GPIO_INTR_LOW_LEVEL);
-    esp_sleep_enable_gpio_wakeup(); esp_light_sleep_start(); gpio_set_level(Configuration::Hardware::TFTPINS[5], 1); N->_Board._Halt.store(false, std::memory_order_relaxed); N->_Log.Metrics("Continuing after Light Snooze"); return ESP_OK;
-}
 
 esp_err_t Network::_OTA(httpd_req_t* R) {
     auto* N = static_cast<Network*>(R->user_ctx); std::array<char, 1024> B{}; int L = 0, REM = R->content_len; const char* ERR = nullptr;

@@ -32,8 +32,8 @@ namespace Configuration {
         inline constexpr std::array<std::string_view, 4> NAMES{ "HAPPY", "WORRIED", "SLEEPY", "DEAD"};
         inline constexpr std::array<gpio_num_t, 8> DIRS{GPIO_NUM_2, GPIO_NUM_4, GPIO_NUM_5, GPIO_NUM_6, GPIO_NUM_7, GPIO_NUM_8, GPIO_NUM_12, GPIO_NUM_13}; // Module 1 (left): IN1, IN2 = A front, IN3, IN4 = C rear | Module 2 (right): IN1, IN2 = B front, IN3, IN4 = D rear
         inline constexpr std::array<gpio_num_t, 4> ENS{GPIO_NUM_14, GPIO_NUM_15, GPIO_NUM_16, GPIO_NUM_38}; // Module 1: ENA = A, ENB = C | Module 2: ENA = B, ENB = D
-        inline constexpr std::array<gpio_num_t, 6> TFTPINS{GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_47, GPIO_NUM_21, GPIO_NUM_41, GPIO_NUM_40}; // SCL, SDA, RES, DC, CS, BLK
-        inline constexpr gpio_num_t TRIGPIN{GPIO_NUM_42}, ECHOPIN{GPIO_NUM_3}, SCLPIN{GPIO_NUM_10}, SDAPIN{GPIO_NUM_11}, WAKEPIN{GPIO_NUM_9}; // HC-SR04 Trig, HC-SR04 Echo, GY-521 SCL, GY-521 SDA, wake switch
+        inline constexpr std::array<gpio_num_t, 6> TFTPINS{GPIO_NUM_17, GPIO_NUM_18, GPIO_NUM_47, GPIO_NUM_21, GPIO_NUM_41, GPIO_NUM_40}; // TFT:SCL, TFT:SDA, TFT:RES, TFT:DC, TFT:CS, TFT:BLK
+        inline constexpr gpio_num_t TRIGPIN{GPIO_NUM_42}, ECHOPIN{GPIO_NUM_3}, SCLPIN{GPIO_NUM_10}, SDAPIN{GPIO_NUM_11}; // USD:Trig, USDEcho, GYRO:SCL, GYRO:SDA
         inline constexpr uint16_t BIASN{200}, POSTMS{60}, BATSAMPLES{8}, BATNUM{49}, BATDEN{10}, BATMIN{9000}, BATSPAN{36};
         inline constexpr uint16_t BATMAX{BATMIN + 100 * BATSPAN};
         inline constexpr uint32_t I2CHZ{400000}, SPIHZ{40000000}, PWMHZ{20000};
@@ -47,8 +47,8 @@ namespace Configuration {
 
     // ------- Network -------
     namespace Network {
-        inline constexpr std::string_view SSID{"SSID"};
-        inline constexpr std::string_view PASS{"PASS"};
+        inline constexpr std::string_view SSID{"WIN-7CBRB18PEP0 5553"};
+        inline constexpr std::string_view PASS{"e8&761M27"};
         inline constexpr std::string_view URIROOT{"/"};
         inline constexpr std::string_view URILOGS{"/Logs/*"};
         inline constexpr std::string_view URITELEMETRY{"/Telemetry"};

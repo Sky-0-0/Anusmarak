@@ -106,7 +106,7 @@ Once the robot is on your hotspot, open `http://Anusmarak.local`. The page loads
 | `GET /Telemetry` | JSON: battery, temperature, expression, RSSI, exceptions, uptime, distance |
 | `GET /Logs/<name>.log` | Log file text |
 | `POST /OTA` | Upload a firmware image |
-| `GET /Restart`, `GET /Shutdown` | Halt the robot, then restart or light-sleep (wake with the switch on GPIO 9) |
+| `GET /Restart` | Halt the robot, then restart |
 
 The restart, shutdown and OTA endpoints have **no authentication**. This is deliberate: the robot is meant for a private exhibition hotspot. Do not expose it to an untrusted network.
 
