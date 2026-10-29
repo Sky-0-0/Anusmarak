@@ -36,7 +36,7 @@ void Orchestrator::Initialize() {
 }
 
 void Orchestrator::_Task() {
-    using namespace Configuration::Orchestrator; using Device = Hardware::Device; using Expression = Hardware::Expression;
+    using namespace Configuration::Orchestrator; using Devices = Hardware::Devices; using Expressions = Hardware::Expressions;
     TickType_t TIC = xTaskGetTickCount(); std::array<uint16_t, SAMPLES> BUF{}; uint8_t TICKS = 0, IDX = 0, CNT = 0; bool ASLEEP = false, WORRY = false;
 
     while (true) {
@@ -57,9 +57,9 @@ void Orchestrator::_Task() {
 
         // Expression: DEAD > SLEEPY > WORRIED > HAPPY, with hysteresis on the latter two
         uint8_t LEVEL = _Board.PCT(); float DIST = _Board.Distance();
-        ASLEEP = !_Board.Exception(Device::BATTERY) && (LEVEL <= SLEEPYIN || (ASLEEP && LEVEL < SLEEPYOUT));
-        WORRY = _Board.Mode() != Hardware::Action::FORWARD || DIST < WORRYON || (WORRY && DIST < WORRYOFF);
-        _Board.SetExpression(_Board.Exceptions() & (Device::MOTORS | Device::GYRO | Device::USD) ? Expression::DEAD : ASLEEP ? Expression::SLEEPY : WORRY ? Expression::WORRIED : Expression::HAPPY);
+        ASLEEP = !_Board.Exception(Devices::BATTERY) && (LEVEL <= SLEEPYIN || (ASLEEP && LEVEL < SLEEPYOUT));
+        WORRY = _Board.Mode() != Hardware::Actions::FORWARD || DIST < WORRYON || (WORRY && DIST < WORRYOFF);
+        _Board.SetExpression(_Board.Exceptions() & (Devices::MOTORS | Devices::IMU | Devices::USD) ? Expressions::DEAD : ASLEEP ? Expressions::SLEEPY : WORRY ? Expressions::WORRIED : Expressions::HAPPY);
     }
 }
 

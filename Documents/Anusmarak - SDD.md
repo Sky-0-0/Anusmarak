@@ -7,8 +7,8 @@
 |Field|Detail|
 |---|---|
 |**Document ID**|ANUSMARAK-SDD-001|
-|**Version**|1.0.0|
-|**Status**|Approved|
+|**Version**|1.0.1|
+|**Status**|Updated — hardware bring-up addendum|
 |**Prepared By**|Team Engram|
 |**Date**|October 19, 2026|
 
@@ -58,6 +58,12 @@ This Software Design Document describes the architecture, modules, data and inte
 ### 1.2 Scope
 
 This document covers all firmware executing on the ESP32-S3-WROOM-1-N16R8: every class, its responsibilities, its interface and its FreeRTOS task or ISR binding. Hardware bring-up procedures, PCB layout and mechanical design are out of scope.
+
+### Current Hardware Bring-up Note — Mock Expo (October 29, 2026)
+
+The resistors, capacitors and breadboard are available. A suitable main fuse has **not** been sourced, and the team lead has not approved the proposed fuse/copper-wiring work. The battery cells are exposed (no holders) and are soldered together; the interconnect strip is confirmed to be nickel-plated steel. The switch terminal is a closed loop; the intended connection is to wrap the wire through/around the loop and solder it, with no fastener at the switch. Only the motor-driver terminals use screws. The USD (ultrasonic distance sensor) was failing because the IMU was not connected; after connecting the IMU, the USD works correctly. This is an observed bring-up correction, not a guarantee that the full robot is electrically safe.
+
+**Safety gate:** Do not energize the 3S battery pack or run the motors with the main fuse absent, exposed cells, or unverified/unsupported aluminum-to-terminal joints. BMS protection is not a substitute for a correctly rated pack-positive fuse. If the fuse and approved terminations cannot be obtained before the Mock Expo, use a non-powered/static demonstration or a separately validated, current-limited bench supply arrangement approved by the team lead. Do not improvise a temporary battery connection for a few minutes of operation.
 
 ### 1.3 Definitions and Acronyms
 
@@ -332,7 +338,7 @@ Holds the failure mask and the shared state that crosses tasks, and owns the dev
 1. **Temperature:** `temperature_sensor_install` (20–100°C range) and enable. Reported as `TEMPERATURE`.
 2. **RGB:** `led_strip` on GPIO 48 (WS2812, one LED, RMT at 10MHz). Reported as `RGB`.
 3. **Battery:** ADC1 one-shot on ADC1_CH0, 12dB attenuation, curve-fitting calibration. One `Voltage()` read must be above 0; the published millivolts and percentage start from it. Reported as `BATTERY`.
-4. **I2C bus:** master bus on `SCLPIN`/`SDAPIN`, port 0, internal pull-ups, glitch filter 7. Reported as `GYRO` (`Drive` reports again after probing the sensor).
+4. **I2C bus:** master bus on `SCLPIN`/`SDAPIN`, port 0, internal pull-ups, glitch filter 7. Reported as `IMU` (`Drive` reports again after probing the sensor).
 5. **SPI bus:** SPI2 on the TFT clock and data pins, no MISO, DMA automatic, `max_transfer_sz` of one strip. Reported as `TFT` (`UI` reports again after the device).
 
 The device bits and their checks:
@@ -343,7 +349,7 @@ The device bits and their checks:
 |`RGB`|`Hardware`|LED strip creation returns `ESP_OK`|
 |`BATTERY`|`Hardware`|ADC set-up returns `ESP_OK` and the first read is above 0|
 |`MOTORS`|`Drive`|Every GPIO and LEDC return code `ESP_OK`|
-|`GYRO`|`Hardware`, `Drive`|I2C bus created; MPU ACK; `WHO_AM_I` = `GYROADDR`; more than `BIASN / 2` bias samples read|
+|`IMU`|`Hardware`, `Drive`|I2C bus created; MPU ACK; `WHO_AM_I` = `GYROADDR`; more than `BIASN / 2` bias samples read|
 |`USD`|`Drive`|ISR set-up `ESP_OK`; one `_Ping()` produces a completed echo within `POSTMS`|
 |`TFT`|`Hardware`, `UI`|SPI bus and device creation, pin set-up and every init command `ESP_OK`|
 |`SERIAL`|—|Reserved bit; no class reports it|
@@ -366,9 +372,9 @@ Owns the motors, the MPU-6050 and the HC-SR04. One task, `DriveTask`, runs the h
 `Initialize()` steps, none of which stops the others:
 
 1. **Motors:** the 8 `DIRS` pins as outputs, driven low; one LEDC timer (`PWMBITS`, `PWMHZ`, low-speed) and channels CH0–CH3 on `ENS`. Reported as `MOTORS`.
-2. **Gyro:** MPU-6050 (`GYROADDR`) added on the bus from `Hardware` at `I2CHZ`; woken, ±500°/s, 44Hz low-pass (`GYROINIT`); `WHO_AM_I` checked; `BIASN` stationary gyro-Z samples taken 10ms apart (about 2 seconds) and averaged into `_Bias`. The robot must be stationary at power-on. Reported as `GYRO`.
+2. **Gyro:** MPU-6050 (`GYROADDR`) added on the bus from `Hardware` at `I2CHZ`; woken, ±500°/s, 44Hz low-pass (`GYROINIT`); `WHO_AM_I` checked; `BIASN` stationary gyro-Z samples taken 10ms apart (about 2 seconds) and averaged into `_Bias`. The robot must be stationary at power-on. Reported as `IMU`.
 3. **USD:** `TRIGPIN` as output (low); `ECHOPIN` as input with a pull-down and an any-edge interrupt; `gpio_install_isr_service(ESP_INTR_FLAG_IRAM)` (already-installed is accepted) and `gpio_isr_handler_add`; one `_Ping()`, then wait `POSTMS` for `_EchoUs` to become non-zero. A working HC-SR04 holds ECHO high about 38ms with nothing in range, so it always completes a pulse inside the window. Reported as `USD`.
-4. **Task:** if `MOTORS`, `GYRO` or `USD` failed, no task is created and the motor pins stay low. Otherwise `DriveTask` is created with `xTaskCreatePinnedToCore` and a non-capturing lambda passing `this`; a failed creation logs with `Exception`.
+4. **Task:** if `MOTORS`, `IMU` or `USD` failed, no task is created and the motor pins stay low. Otherwise `DriveTask` is created with `xTaskCreatePinnedToCore` and a non-capturing lambda passing `this`; a failed creation logs with `Exception`.
 
 `_Task()` pass, every 10ms:
 
@@ -602,7 +608,7 @@ _Boot sequence of `Orchestrator::Run()`._
 |Part|Rule|
 |---|---|
 |Battery|Once per second (every `SAMPLEMOD` ticks), unless halted, read `Voltage()`; a non-zero reading goes into a ring of `SAMPLES` (5) values. When the ring is full and its spread is under `SPREADMV` (100mV), the average is published as the millivolts and its percentage is computed. The percentage is published only if it is lower than the current value, or higher by more than `JUMPPCT` (10 points, a recharge); each publish is logged with `Metrics`. Samples are taken during motion as well|
-|Expression|Priority DEAD > SLEEPY > WORRIED > HAPPY. DEAD: the failure mask contains `MOTORS`, `GYRO` or `USD`. SLEEPY: the battery check passed and the percentage is at or below `SLEEPYIN` (15), staying until it is at or above `SLEEPYOUT` (20). WORRIED: the drive mode is not FORWARD, or the distance is under `WORRYON` (30cm), staying until it reaches `WORRYOFF` (35cm). Otherwise HAPPY. Published through `Hardware::SetExpression`|
+|Expression|Priority DEAD > SLEEPY > WORRIED > HAPPY. DEAD: the failure mask contains `MOTORS`, `IMU` or `USD`. SLEEPY: the battery check passed and the percentage is at or below `SLEEPYIN` (15), staying until it is at or above `SLEEPYOUT` (20). WORRIED: the drive mode is not FORWARD, or the distance is under `WORRYON` (30cm), staying until it reaches `WORRYOFF` (35cm). Otherwise HAPPY. Published through `Hardware::SetExpression`|
 
 ```mermaid
 %%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":38,"padding":12}}}%%
@@ -632,7 +638,7 @@ _Battery sampling and publishing (`OrchTask`)._
 ```mermaid
 %%{init: {"theme":"neutral","themeVariables":{"fontFamily":"Helvetica, Arial, sans-serif","fontSize":"15px"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":38,"padding":12}}}%%
 flowchart LR
-  A(["Every 100 ms"]) --> D{"MOTORS, GYRO or<br/>USD failed?"}
+  A(["Every 100 ms"]) --> D{"MOTORS, IMU or<br/>USD failed?"}
   D -->|"yes"| R1(["DEAD"])
   D -->|"no"| S{"Battery check passed and<br/>≤ 15 %, held until ≥ 20 %?"}
   S -->|"yes"| R2(["SLEEPY"])
@@ -790,21 +796,76 @@ Board caveats: a devkit with a USB-UART bridge may wire GPIO 43/44 to the bridge
 
 Silkscreen labels are those printed on the parts. Every GND is joined to one common ground (pack negative, buck GND, ESP32 GND, both L298N GND, all sensors).
 
-**Wiring diagram 1: Pack, HW-375 BMS, Charger and main switch:**
-![Pack Wiring](PackWiring.png)
+### Wiring diagram 1 — Battery pack, BMS, charger and main protection
 
-**Wiring diagram 2: Power Distribution after the main switch:**
+![Wiring diagram](PackWiring.png)
+
+This is the intended topology, **not authorization to energize the current unfused build**. Follow the exact pad labels printed on the specific BMS and charger; do not infer pad positions from this diagram.
+
+```mermaid
+flowchart LR
+  C1[Cell 1] --- N1[Series interconnect]
+  N1 --- C2[Cell 2]
+  C2 --- N2[Series interconnect]
+  N2 --- C3[Cell 3]
+  C1 -. cell taps .-> BMS[HW-375 3S BMS]
+  C2 -. cell taps .-> BMS
+  C3 -. cell taps .-> BMS
+  BMS -->|Pack positive| FUSE[Correctly rated fuse and holder]
+  FUSE --> SW[Main switch: closed-loop terminal]
+  SW --> VSW[Switched pack positive]
+  BMS -->|Pack negative| GND[Common negative]
+  CHG[USB-C 3S charger] -->|Connect only to verified BMS charge/load pads| BMS
+```
+
+**Current build status:** fuse unavailable; cells exposed; do not power the pack/motors. No salvaged glass fuse or bare-wire workaround is approved. The main-switch wire is intended to wrap through/around its closed-loop terminal and be soldered; no fastener is used at the switch. This is conditional on the switch terminal being solderable and rated for the full pack current. Only the L298N motor-driver terminals use screws.
+
+### Wiring diagram 2 — Switched power distribution
+
 ![Power Distribution](Distribution.png)
 
-**Wiring diagram 3: Signal Wiring:**
-![Signal Wiring](Signals.png)
+```mermaid
+flowchart TB
+  VSW[Switched pack positive — only after fuse and switch] --> L1[L298N left VS]
+  VSW --> L2[L298N right VS]
+  VSW --> BUCK[MP1584EN buck input]
+  GND[Pack negative / common GND] --- L1
+  GND --- L2
+  GND --- BUCK
+  BUCK -->|Set and verify 5.0 V before connecting loads| V5[5 V rail]
+  V5 --> ESP[ESP32-S3 5V]
+  V5 --> USD[HC-SR04 VCC]
+  ESP -->|On-board 3.3 V regulator| V33[3.3 V rail]
+  V33 --> IMU[GY-521 / MPU-6050]
+  V33 --> TFT[GC9A01 TFT]
+  ESP --- GND
+  USD --- GND
+  IMU --- GND
+  TFT --- GND
+```
+
+### Wiring diagram 3 — Signal wiring
+
+```mermaid
+flowchart LR
+  IMU[GY-521 / MPU-6050] -->|SDA GPIO 11; SCL GPIO 10| ESP[ESP32-S3]
+  USD[HC-SR04] -->|TRIG GPIO 42| ESP
+  USD -->|ECHO through 1kΩ/2kΩ divider| ECHO[GPIO 3]
+  ESP -->|GPIO 2,4,5,6,14,15| L1[L298N left]
+  ESP -->|GPIO 7,8,12,13,16,38| L2[L298N right]
+  ESP -->|GPIO 17,18,47,21,41,40| TFT[GC9A01 TFT]
+  DIV[Battery divider 390kΩ / 100kΩ] -->|ADC1 GPIO 1; 100 nF to GND| ESP
+  ESP -->|GPIO 48| RGB[On-board RGB LED]
+```
+
+**Termination recommendation:** do not use 1 mm solid aluminum wire as a substitute for solderable copper pigtails on the BMS P− pad, buck/charger pads, or switch loop. Aluminum oxide makes soldering unreliable; unsupported mixed-metal joints can loosen, corrode and heat. The intended switch connection is wire wrapped through/around the closed loop and soldered, with no fastener at the switch. This is only appropriate if the switch terminal is designed to accept soldering and is rated for the full pack current; solder must not be the only thing mechanically supporting a high-current wire. Only the L298N motor-driver terminals use screws. Do not attach bare aluminum directly to solder pads. The two damaged/stripped jumpers do not make the power path safe. Two copper wires are already available, and two more can be obtained if needed; allocate them only after identifying each required joint and its current rating; **do not assemble or power this battery path until proper approved terminals/connectors and fuse hardware are available.**
 
 **Power**
 
 |From|To|
 |---|---|
 |3 × 18650 cells|BMS pads 0V, 4.2V, 8.4V, 12.6V (HW-375 silkscreen), in that order|
-|BMS pack output + / −|Buck IN+ / IN−; both L298N +12V (VS) / GND|
+|BMS pack output + / −|5A fuse (pack positive) and rocker switch, then VSW: Buck IN+ / IN−; both L298N +12V (VS) / GND|
 |Charger output|BMS pack output terminals (charge and load share them; confirm on the BMS silkscreen)|
 |Buck OUT (set to 5.0V first)|ESP32-S3 5V pin; HC-SR04 VCC|
 |ESP32-S3 3V3 pin|GC9A01 VCC; GY-521 VCC|
@@ -902,7 +963,7 @@ C++ exceptions are off. Error propagation uses the failure mask.
 |---|---|
 |LittleFS mount failure|`ESP_LOGE`; `Orchestrator::Run()` returns; no subsystem starts|
 |NVS failure|`Exception` logged; `Run()` returns before `Drive`, `UI` and `Network` initialise; the robot stays inert|
-|`MOTORS`, `GYRO` or `USD` failed at boot|No `DriveTask`; motor pins stay low; expression DEAD; the LED blinks red five times|
+|`MOTORS`, `IMU` or `USD` failed at boot|No `DriveTask`; motor pins stay low; expression DEAD; the LED blinks red five times|
 |`BATTERY` failed at boot|`Voltage()` returns 0; the percentage is 0 (red ring); no battery sample is published; the robot never reads SLEEPY|
 |`TFT` failed|`UI::Initialize()` starts no task; the screen and backlight stay off|
 |`WIFI` failed|`Network::Initialize()` skips mDNS and HTTP; the robot otherwise runs normally|

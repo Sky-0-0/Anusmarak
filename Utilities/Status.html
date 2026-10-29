@@ -138,7 +138,7 @@
 
         const DSTC = new Chart(document.getElementById('DistanceChart'), {
           type: 'line', data: { labels: TIMELBLS, datasets: [{ data: DSTDAT, borderColor: '#47c5ff', backgroundColor: 'rgba(71,197,255,.07)', fill: true, tension: .2, pointRadius: 0, borderWidth: 1.5, spanGaps: true }] },
-          options: { responsive: true, animation: { duration: 150 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(30,34,41,.6)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(30,34,41,.6)' }, min: 0, max: 200 } } }
+          options: { responsive: true, animation: { duration: 150 }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: 'rgba(30,34,41,.6)' }, ticks: { maxTicksLimit: 8 } }, y: { grid: { color: 'rgba(30,34,41,.6)' }, min: 0, max: 400 } } }
         });
 
         const TEMPC = new Chart(document.getElementById('TemperatureChart'), {
@@ -199,7 +199,7 @@
             const PAD = N => String(N).padStart(2, '0');
             document.getElementById('HUPT').textContent = `${PAD(Math.floor(UPSEC / 3600))}:${PAD(Math.floor((UPSEC % 3600) / 60))}:${PAD(UPSEC % 60)}`;
           }
-          if (DAT.USD != null) { TIMELBLS.push(new Date().toLocaleTimeString()); TIMELBLS.shift(); DSTDAT.push(DAT.USD); DSTDAT.shift(); DSTC.update('none'); }
+          if (DAT.USD != null) { TIMELBLS.push(new Date().toLocaleTimeString()); TIMELBLS.shift(); DSTDAT.push(DAT.Exceptions.includes('USD') ? null : DAT.USD); DSTDAT.shift(); DSTC.update('none'); }
           if (DAT.Temperature != null) { TEMPDAT.push(DAT.Temperature); TEMPDAT.shift(); TEMPC.update('none'); }
         };
 

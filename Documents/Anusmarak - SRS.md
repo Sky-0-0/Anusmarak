@@ -7,8 +7,8 @@ Anusmarak — Autonomous Personal Assistant Robot
 |Field|Detail|
 |---|---|
 |Document ID|ANUSMARAK-SRS-001|
-|Version|1.0.0|
-|Status|Approved|
+|Version|1.0.1|
+|Status|Updated — hardware bring-up addendum|
 |Prepared By|Team Engram|
 |Date|October 19, 2026|
 
@@ -144,7 +144,8 @@ flowchart LR
   class WEB ext
 ```
 
-_System context: what the robot senses, drives and talks to._
+*System context: what the robot senses, drives and talks to.*
+
 
 ### 2.2 Product Functions
 
@@ -192,11 +193,17 @@ _System context: what the robot senses, drives and talks to._
 |Control Architecture|Dual loop on a skid-steer platform. The PID heading-hold loop runs at 100Hz on gyroscope yaw rate. The PD distance loop runs at 10Hz on HC-SR04 readings. Heading hold sets the PWM differential between the left and right pairs; distance control scales the base speed of both pairs. The robot has no external drive input: it decides when and where to move from its own sensors|
 |Reserved GPIOs|GPIO 26–32 (flash and PSRAM SPI), 35–37 (octal PSRAM) and 19–20 (USB Serial/JTAG) are never assigned. Strapping pins 0, 45 and 46 are unused|
 
+### Current Hardware Status — Mock Expo (October 29, 2026)
+
+The resistors, capacitors and breadboard are available; the main fuse is not. The team lead has not approved the proposed fuse/copper-wiring work. The 18650 cells are exposed without holders and are soldered together; the interconnect strip appears nickel-plated steel, but this is not confirmed. The switch terminal is a closed loop. The USD failure was traced to the IMU being disconnected; the USD works after the IMU was connected.
+
+These observations supersede the earlier assumption that all hardware and protective parts are in hand. **The battery-powered drive is not cleared for operation while the fuse is missing or power joints are improvised.** BMS protection does not replace a correctly rated fuse. If approved protection and proper terminations cannot be installed and inspected, demonstrate without energizing the pack or motors.
+
 ### 2.6 Assumptions and Dependencies
 
 Assumptions:
 
-1. All hardware components are in hand.
+1. Hardware availability is partial; see “Current Hardware Status — Mock Expo”. A suitable main fuse is not in hand.
 2. A laptop providing a 2.4GHz WPA2 hotspot with internet access, and a phone or computer on it, are available at the expo for the dashboard.
 
 Dependencies:
@@ -222,7 +229,7 @@ Priority levels: High — required for a functional demo; Medium — required fo
 flowchart LR
   subgraph HL["Heading loop · 100 Hz"]
     direction LR
-    GYRO["MPU-6050<br/>gyro Z rate"] --> HDG["Heading estimate<br/>∫ rate − bias"]
+    IMU["MPU-6050<br/>gyro Z rate"] --> HDG["Heading estimate<br/>∫ rate − bias"]
     HDG --> PID["PID on error<br/>setpoint − heading<br/>output ±127"]
   end
   subgraph DL["Distance loop · 10 Hz"]
@@ -237,12 +244,12 @@ flowchart LR
   classDef a fill:#e3f2fd,stroke:#1565c0,color:#0d2a4a
   classDef b fill:#ede7f6,stroke:#5e35b1,color:#1f1147
   classDef c fill:#fff3e0,stroke:#e65100,color:#4a2100
-  class GYRO,USD a
+  class IMU,USD a
   class HDG,PID,PD,BASE,MIX b
   class LM,RM c
 ```
 
-_Control structure: the 100Hz heading loop sets the left/right differential, the 10Hz distance loop sets the base speed._
+*Control structure: the 100Hz heading loop sets the left/right differential, the 10Hz distance loop sets the base speed.*
 
 |ID|Requirement|Priority|Verification|
 |---|---|---|---|
@@ -281,7 +288,7 @@ stateDiagram-v2
   end note
 ```
 
-_Escape manoeuvre (FR-06, FR-07). Stage numbers and timings are in SDD §4.3._
+*Escape manoeuvre (FR-06, FR-07). Stage numbers and timings are in SDD §4.3.*
 
 ---
 
@@ -434,34 +441,35 @@ The targets below are design targets. A target that has not been measured is not
 
 ## Appendix A: Hardware Specifications and Budget
 
-|Component|Model|Qty|Unit (₹)|Total (₹)|Status|
-|---|---|---|---|---|---|
-|Microcontroller|ESP32-S3-WROOM-1-N16R8|1|999|999|✅ Ordered|
-|Chassis + Motors|4WD platform with TT motors (3–6V)|1|539|539|✅ Purchased|
-|Motor Driver|L298N dual H-bridge (Module 1)|1|199|199|✅ Ordered|
-|Motor Driver|L298N dual H-bridge (Module 2)|1|199|199|✅ Ordered|
-|TFT Display|GC9A01 round 240×240 SPI|1|826|826|✅ Ordered|
-|IMU|MPU-6050 breakout|1|289|289|✅ Ordered|
-|Audio I/O Module|MAX98357A + INMP441 combo|1|439|439|**Sunken Cost**|
-|Speaker|4Ω 3W (pack of 2)|1|256|256|**Sunken Cost**|
-|Ultrasonic Sensor|HC-SR04|1|150|150|✅ Ordered|
-|Resistors|390kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
-|Resistors|100kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
-|Resistors|1kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
-|Resistors|2kΩ, 1% metal film, ¼W|2|5|10|**Local Market**|
-|Resistors|10kΩ, 5%, ¼W|6|5|30|**Local Market**|
-|Resistors|4.7kΩ, 5%, ¼W|3|5|15|**Local Market**|
-|Capacitors|100nF ceramic|8|5|40|**Local Market**|
-|Capacitors|100µF, ≥16V electrolytic|2|5|10|**Local Market**|
-|Capacitors|220µF, ≥25V electrolytic|3|5|15|**Local Market**|
-|Test Equipment|Digital multimeter|1|400|400|**Local Market**|
-|Battery Cells|18650 Li-ion 1200mAh (×3)|3|40|120|✅ Ordered|
-|Battery Charger|USB-C to 12.6V 3S Boost Charger|1|175|175|✅ Ordered|
-|Protection BMS|HW-375 3S 20A BMS|1|69|69|✅ Ordered|
-|Buck Converter|MP1584EN 3A DC-DC Step-Down|1|123|123|✅ Ordered|
-|Total||||₹4,933||
-|Budget Ceiling||||₹5,000||
-|Headroom||||₹67||
+| Component         | Model                                | Qty | Unit (₹) | Total (₹) | Status           |
+| ----------------- | ------------------------------------ | --- | -------- | --------- | ---------------- |
+| Microcontroller   | ESP32-S3-WROOM-1-N16R8               | 1   | 999      | 999       | ✅ Ordered        |
+| Chassis + Motors  | 4WD platform with TT motors (3–6V)   | 1   | 539      | 539       | ✅ Purchased      |
+| Motor Driver      | L298N dual H-bridge (Module 1)       | 1   | 199      | 199       | ✅ Ordered        |
+| Motor Driver      | L298N dual H-bridge (Module 2)       | 1   | 199      | 199       | ✅ Ordered        |
+| TFT Display       | GC9A01 round 240×240 SPI             | 1   | 826      | 826       | ✅ Ordered        |
+| IMU               | MPU-6050 breakout                    | 1   | 289      | 289       | ✅ Ordered        |
+| Audio I/O Module  | MAX98357A + INMP441 combo            | 1   | 439      | 439       | **Sunken Cost**  |
+| Speaker           | 4Ω 3W (pack of 2)                    | 1   | 256      | 256       | **Sunken Cost**  |
+| Ultrasonic Sensor | HC-SR04                              | 1   | 150      | 150       | ✅ Ordered        |
+| Resistors         | 390kΩ, 1% metal film, ¼W             | 2   | 5        | 10        | **Local Market** |
+| Resistors         | 100kΩ, 1% metal film, ¼W             | 2   | 5        | 10        | **Local Market** |
+| Resistors         | 1kΩ, 1% metal film, ¼W               | 2   | 5        | 10        | **Local Market** |
+| Resistors         | 2kΩ, 1% metal film, ¼W               | 2   | 5        | 10        | **Local Market** |
+| Resistors         | 10kΩ, 5%, ¼W                         | 6   | 5        | 30        | **Local Market** |
+| Resistors         | 4.7kΩ, 5%, ¼W                        | 3   | 5        | 15        | **Local Market** |
+| Capacitors        | 100nF ceramic                        | 8   | 5        | 40        | **Local Market** |
+| Capacitors        | 100µF, ≥16V electrolytic             | 2   | 5        | 10        | **Local Market** |
+| Capacitors        | 220µF, ≥25V electrolytic             | 3   | 5        | 15        | **Local Market** |
+| Test Equipment    | Digital multimeter                   | 1   | 400      | 400       | **Local Market** |
+| Battery Cells     | 18650 Li-ion 1200mAh (×3)            | 3   | 40       | 120       | ✅ Ordered        |
+| Battery Charger   | USB-C to 12.6V 3S Boost Charger      | 1   | 175      | 175       | ✅ Ordered        |
+| Protection BMS    | HW-375 3S 20A BMS                    | 1   | 69       | 69        | ✅ Ordered        |
+| Buck Converter    | MP1584EN 3A DC-DC Step-Down          | 1   | 123      | 123       | ✅ Ordered        |
+| Fuse              | 5A fuse with holder (blade or glass) | 1   | 20       | 20        | **Not Sourced**  |
+| Total             |                                      |     |          | ₹4,953    |                  |
+| Budget Ceiling    |                                      |     |          | ₹5,000    |                  |
+| Headroom          |                                      |     |          | ₹47       |                  |
 
 Sunken Cost items were purchased for the dropped audio feature and are not used; they stay in the total because the money is spent. Resistor roles are in Appendix F.5 and their ratings in Appendix F.6; capacitor roles and ratings are in Appendix F.7; every resistor and capacitor is priced at ₹5. Resistor and capacitor quantities are purchase quantities and include spares (the design needs 1 × 390kΩ, 1 × 100kΩ, 1 × 1kΩ, 1 × 2kΩ, 4 × 10kΩ, 2 × 4.7kΩ, 5 × 100nF, 1 × 100µF and 2 × 220µF); the second 1kΩ is a spare. The multimeter is a bench tool for the checks in Appendix F.8; its ₹400 price is an estimate, and the budget ceiling is exceeded if it costs more than ₹462.
 
@@ -570,7 +578,7 @@ gantt
   Submission   :milestone, m1, 2026-11-05, 0d
 ```
 
-_Sprint timeline (Appendix D table above)._
+*Sprint timeline (Appendix D table above).*
 
 ---
 
@@ -594,6 +602,7 @@ _Sprint timeline (Appendix D table above)._
 |R-12|A bad or interrupted OTA image|Low|Medium|
 |R-13|Unauthenticated restart and OTA endpoints are misused|Low|Low|
 |R-14|ESP32-S3 PSRAM instability (chip revision v0.2) at boot|Low|High|
+|R-15|A short in the pack wiring heats or burns a wire or damages a cell|Low|High|
 
 ### Mitigation and Contingency
 
@@ -609,10 +618,11 @@ _Sprint timeline (Appendix D table above)._
 |R-08|Curve-fitting calibration; 100nF cap on GPIO 1; 8-sample average; stable-window filter|Readings show > 200mV noise, or the percentage stops moving under load|Use a longer average; log voltage during motion|
 |R-09|Check the 5V output under Wi-Fi bursts; fit C2 (100µF) on the buck output (F.7). The motors are on the pack rail (C3, C4), so the buck no longer sees motor inrush|Buck output drops below 4.75V under load|Add a second bulk capacitor on the buck output|
 |R-10|1kΩ/2kΩ divider on ECHO; check GPIO 3 with a multimeter before powering the MCU|GPIO 3 reads > 3.6V (the normal reading is 3.17–3.50V, F.4)|Replace the sensor with a 3.3V-compatible module (HC-SR04P)|
-|R-11|Keep the robot stationary at power-on (about 2 seconds for bias sampling); the self-test reports the cause|Boot line lists GYRO or USD|Re-seat the wiring and reboot|
+|R-11|Keep the robot stationary at power-on (about 2 seconds for bias sampling); the self-test reports the cause|Boot line lists IMU or USD|Re-seat the wiring and reboot|
 |R-12|Rollback is enabled; the image is marked valid only at the end of boot; a halted robot stays safe during upload|Robot does not return after OTA|Reflash over USB|
 |R-13|The network is a private exhibition hotspot (accepted)|Unexpected restart or upload|Change the hotspot password|
 |R-14|Test cold and warm boots; the firmware does not use PSRAM|Boot aborts at PSRAM initialisation|Disable PSRAM in the build configuration|
+|R-15|Cell leads to the BMS are short and insulated, and cells are connected last. The BMS has short-circuit protection on its output side (HW-375 trip point not verified). A correctly rated fuse in a suitable holder in the pack-positive lead is required before battery-powered operation; the fuse is currently unavailable|Sparks, a hot wire or a hot cell at any connection|Disconnect the cells at once; do not reconnect until the cause is found; do not energize the pack or run the motors without an installed, correctly rated fuse|
 
 ---
 
@@ -660,7 +670,7 @@ flowchart TB
   class M1,M2,ESP,SONAR,IMU,TFT load
 ```
 
-_Power tree. Wiring diagrams are in SDD §6.4._
+*Power tree. Wiring diagrams are in SDD §6.4.*
 
 ### F.2 Power Budget and Runtime
 
@@ -794,10 +804,12 @@ R1 and R2 see at most 10V, far below the voltage rating of any ¼W resistor. Buy
 
 ### F.8 Expected Measurements
 
-**Wiring diagram 1: Pack, HW-375 BMS, Charger and main switch:**
-![Pack Wiring](PackWiring.png)
+*Wiring diagram 1: pack, BMS, charger, fuse and main switch. Pad names follow the standard low-side layout; confirm each pad with the checks below before connecting.*
 
-**Wiring diagram 2: Power Distribution after the main switch:**
+![Wiring diagram](PackWiring.png)
+
+*Wiring diagram 2: power distribution after the main switch. Signal wiring is in SDD §6.4.*
+
 ![Power Distribution](Distribution.png)
 
 

@@ -65,8 +65,8 @@ private:
 // ------- Hardware -------
 class Hardware {
 public:
-    using Device = Configuration::Hardware::Device; using Expression = Configuration::Hardware::Expression; using Action = Configuration::Actions::Action;
-    bool Exception(Device D) const { return _Exceptions & D; }
+    using Devices = Configuration::Hardware::Device; using Expressions = Configuration::Hardware::Expression; using Actions = Configuration::Actions::Action;
+    bool Exception(Devices D) const { return _Exceptions & D; }
     uint16_t Exceptions() const { return _Exceptions; }
     void Initialize();
     float Temperature() const { float T = 0.0f; if (_TSH) temperature_sensor_get_celsius(_TSH, &T); return T; }
@@ -81,18 +81,18 @@ public:
     uint8_t PCT() const { return _Pct.load(std::memory_order_relaxed); }
     uint16_t MV() const { return _MV.load(std::memory_order_relaxed); }
     bool Halted() const { return _Halt.load(std::memory_order_relaxed); }
-    Action Mode() const { return _Mode.load(std::memory_order_relaxed); }
-    void SetExpression(Expression Expr) { _Expression.store(Expr, std::memory_order_relaxed); }
-
+    Actions Mode() const { return _Mode.load(std::memory_order_relaxed); }
+    Expressions Expression() const { return _Expression.load(std::memory_order_relaxed); }
+    void SetExpression(Expressions Expr) { _Expression.store(Expr, std::memory_order_relaxed); }
     std::string_view EXPR() const { size_t IDX = static_cast<size_t>(_Expression.load(std::memory_order_relaxed)); return ::Configuration::Hardware::NAMES[IDX]; }
 
 private:
     friend class Drive; friend class UI; friend class Network; friend class Orchestrator;
-    void _Report(Device D, bool X) { if (X) _Exceptions |= D; else _Exceptions &= ~D; }
+    void _Report(Devices D, bool X) { if (X) _Exceptions |= D; else _Exceptions &= ~D; }
     uint16_t _Exceptions{};
     std::atomic<float> _Distance{0.0f};
-    std::atomic<Expression> _Expression{Expression::DEAD};
-    std::atomic<Action> _Mode{Action::STOP};
+    std::atomic<Expressions> _Expression{Expressions::DEAD};
+    std::atomic<Actions> _Mode{Actions::STOP};
     std::atomic<bool> _Halt{false};
     std::atomic<uint8_t> _Pct{0};
     std::atomic<uint16_t> _MV{0};
@@ -131,14 +131,11 @@ class UI {
 public:
     explicit UI(Hardware& Board) : _Board(Board) {}
     void Initialize();
-
 private:
     void _Task();
     esp_err_t _Display(uint8_t CMD, const uint8_t* DAT, size_t LEN);
     std::array<uint16_t, Configuration::UI::WIDTH * Configuration::UI::STRIPROWS> _Strip{};
-    spi_device_handle_t _TFT{};
-    Hardware& _Board;
-    Logger _Log{"UI", Configuration::Logger::LF::ORCHESTRATOR};
+    spi_device_handle_t _TFT{}; Hardware& _Board; Logger _Log{"UI", Configuration::Logger::LF::ORCHESTRATOR};
 };
 
 // ------- Network -------
